@@ -126,7 +126,24 @@ function spawnTarget(x, z) {
   scene.add(group);
   targets.push(group);
 }
-[[3, -6], [-5, -2], [7, 8], [-9, -10], [2, 14], [-3, 18]].forEach(([x, z]) => spawnTarget(x, z));
+const MAX_TARGETS = 8;
+const SPAWN_INTERVAL = 4;
+const SPAWN_MIN_DIST_FROM_PLAYER = 10;
+let spawnTimer = SPAWN_INTERVAL;
+
+function spawnRandomTarget() {
+  if (targets.length >= MAX_TARGETS) return;
+  const half = ARENA / 2 - 3;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const x = (Math.random() * 2 - 1) * half;
+    const z = (Math.random() * 2 - 1) * half;
+    if (yawObject.position.distanceTo(new THREE.Vector3(x, 0, z)) < SPAWN_MIN_DIST_FROM_PLAYER) continue;
+    if (collidesAt(x, z)) continue;
+    spawnTarget(x, z);
+    return;
+  }
+}
+
 
 // ----- weapon viewmodel --------------------------------------------------
 const weapon = new THREE.Group();
@@ -175,8 +192,6 @@ document.addEventListener('mousemove', (e) => {
   yaw -= e.movementX * sensitivity;
   pitch -= e.movementY * sensitivity;
   pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
-  yawObject.rotation.y = yaw;
-  pitchObject.rotation.x = pitch;
 });
 
 // ----- audio (simple synthesized FX, no external assets) ----------------
@@ -318,11 +333,6 @@ function killTarget(target, headshot) {
   scene.remove(target);
   targets.splice(targets.indexOf(target), 1);
   addKillFeed(headshot ? '헤드샷 ✕' : '제거 ✕');
-  setTimeout(() => {
-    const x = (Math.random() - 0.5) * 40;
-    const z = (Math.random() - 0.5) * 40;
-    spawnTarget(x, z);
-  }, 1500);
 }
 
 function addKillFeed(text) {
@@ -355,7 +365,6 @@ function collidesAt(x, z) {
 }
 
 let headBobTime = 0;
-let playerHp = 100;
 
 function updateMovement(dt) {
   const forward = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
@@ -422,19 +431,6 @@ function updateTargets(dt, t) {
   }
 }
 
-// ----- damage feedback when too close to a target (simple melee danger) -
-function updateDangerFeedback() {
-  for (const target of targets) {
-    const dist = yawObject.position.distanceTo(target.position);
-    if (dist < 1.4) {
-      playerHp = Math.max(0, playerHp - 0.4);
-      hud.flash.classList.add('show');
-      hud.hp.textContent = Math.round(playerHp);
-      setTimeout(() => hud.flash.classList.remove('show'), 100);
-    }
-  }
-}
-
 // ----- resize -------------------------------------------------------------
 window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
@@ -452,11 +448,17 @@ function animate() {
     updateMovement(dt);
     if (mouseDown) tryShoot();
     if (weaponState.fireCooldown > 0) weaponState.fireCooldown -= dt;
-    updateDangerFeedback();
   }
   updateRecoilRecovery(dt);
   updateTargets(dt, clock.elapsedTime);
 
+  spawnTimer -= dt;
+  if (spawnTimer <= 0) {
+    spawnTimer = SPAWN_INTERVAL;
+    spawnRandomTarget();
+  }
+
   renderer.render(scene, camera);
 }
+for (let i = 0; i < 4; i++) spawnRandomTarget();
 animate();
