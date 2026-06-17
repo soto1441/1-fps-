@@ -102,15 +102,59 @@ const MAPS = {
       [3, -9], [-7, -3], [9, 6], [-9, 11], [-1, 16], [-13, -13], [13, -15], [15, 7], [-3, 19], [5, -21],
     ],
   },
+  arena: {
+    name: '아레나',
+    sky: 0x55667a, fogNear: 22, fogFar: 60,
+    ground: 0x4a525c, wall: 0x6c7a8a, cover: 0x394048,
+    coverPositions: [
+      [-16, -16], [16, 16], [-16, 16], [16, -16],
+    ],
+    interiorWalls: [
+      [1, wallHeight, 20, -10, wallHeight / 2, 0],
+      [1, wallHeight, 20, 10, wallHeight / 2, 0],
+      [20, wallHeight, 1, 0, wallHeight / 2, -10],
+      [20, wallHeight, 1, 0, wallHeight / 2, 10],
+    ],
+  },
+  backrooms: {
+    name: '백룸',
+    sky: 0x4a4322, fogNear: 12, fogFar: 38,
+    ground: 0xb6a356, wall: 0xcdba6a, cover: 0x8c7b3d,
+    coverPositions: [
+      [-20, -20], [20, 20], [0, -22], [0, 22],
+    ],
+    interiorWalls: [
+      [1, wallHeight, 16, -15, wallHeight / 2, -5],
+      [1, wallHeight, 16, -5, wallHeight / 2, 5],
+      [1, wallHeight, 16, 5, wallHeight / 2, -5],
+      [1, wallHeight, 16, 15, wallHeight / 2, 5],
+      [16, wallHeight, 1, -10, wallHeight / 2, -15],
+      [16, wallHeight, 1, 10, wallHeight / 2, 0],
+      [16, wallHeight, 1, -10, wallHeight / 2, 15],
+    ],
+  },
+  onyx: {
+    name: '오닉스',
+    sky: 0x130d10, fogNear: 16, fogFar: 55,
+    ground: 0x16121a, wall: 0x221a26, cover: 0x2a1f28,
+    coverPositions: [
+      [0, -20], [0, 20], [-20, 0], [20, 0],
+    ],
+    hazards: [
+      [-15, -15, 10, 10], [15, 15, 10, 10], [-15, 15, 8, 8], [15, -15, 8, 8],
+    ],
+  },
 };
 
 let currentMapKey = 'urban';
 let levelMeshes = [];
+let currentHazards = [];
 
 function clearLevel() {
   for (const mesh of levelMeshes) scene.remove(mesh);
   levelMeshes = [];
   colliders.length = 0;
+  currentHazards = [];
 }
 
 function buildLevel(key) {
@@ -149,6 +193,32 @@ function buildLevel(key) {
     addCollider(crate);
     levelMeshes.push(crate);
   }
+
+  for (const [w, h, d, x, y, z] of cfg.interiorWalls || []) {
+    const wall = makeBoxMesh(w, h, d, cfg.wall);
+    wall.position.set(x, y, z);
+    scene.add(wall);
+    addCollider(wall);
+    levelMeshes.push(wall);
+  }
+
+  for (const [x, z, w, d] of cfg.hazards || []) {
+    const lava = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.1, d),
+      new THREE.MeshStandardMaterial({ color: 0xff5522, emissive: 0xff3300, emissiveIntensity: 1.2, roughness: 0.5 })
+    );
+    lava.position.set(x, 0.05, z);
+    scene.add(lava);
+    levelMeshes.push(lava);
+    currentHazards.push({ x, z, w, d });
+  }
+}
+
+function hazardAt(x, z) {
+  for (const h of currentHazards) {
+    if (Math.abs(x - h.x) < h.w / 2 && Math.abs(z - h.z) < h.d / 2) return true;
+  }
+  return false;
 }
 
 // ----- targets (simple enemies) ---------------------------------------
@@ -230,6 +300,7 @@ function spawnRandomTarget() {
     const z = (Math.random() * 2 - 1) * half;
     if (yawObject.position.distanceTo(new THREE.Vector3(x, 0, z)) < SPAWN_MIN_DIST_FROM_PLAYER) continue;
     if (collidesAt(x, z)) continue;
+    if (hazardAt(x, z)) continue;
     spawnTarget(x, z);
     return;
   }
@@ -644,6 +715,7 @@ const velocity = new THREE.Vector3();
 const PLAYER_RADIUS = 0.5;
 let canJump = true;
 let verticalVelocity = 0;
+let lavaTickTimer = 0;
 const GRAVITY = 24;
 const JUMP_SPEED = 8.2;
 
@@ -738,6 +810,17 @@ function updateMovement(dt) {
   const nextZ = yawObject.position.z + dir.z * speed * dt;
   if (!collidesAt(nextX, yawObject.position.z)) yawObject.position.x = nextX;
   if (!collidesAt(yawObject.position.x, nextZ)) yawObject.position.z = nextZ;
+
+  // lava hazard damage (onyx map)
+  if (hazardAt(yawObject.position.x, yawObject.position.z)) {
+    lavaTickTimer -= dt;
+    if (lavaTickTimer <= 0) {
+      lavaTickTimer = 0.5;
+      damagePlayer(8);
+    }
+  } else {
+    lavaTickTimer = 0;
+  }
 
   // jump / gravity
   if (keys['Space'] && canJump) {
