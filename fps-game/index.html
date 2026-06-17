@@ -77,6 +77,15 @@
     #blocker h1 { font-size: 38px; letter-spacing: 4px; color: #9be86b; margin-bottom: 6px; }
     #blocker p { font-size: 14px; color: #aaa; margin: 4px 0; }
     #blocker.hidden { display: none; }
+
+    #mapSelect { display: flex; gap: 10px; margin-top: 18px; cursor: default; }
+    .mapBtn {
+      padding: 8px 16px; font-family: inherit; font-size: 13px; letter-spacing: 1px;
+      color: #cdd; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25);
+      border-radius: 4px; cursor: pointer;
+    }
+    .mapBtn:hover { background: rgba(255,255,255,.16); }
+    .mapBtn.active { background: #9be86b; color: #14210a; border-color: #9be86b; font-weight: bold; }
   </style>
 </head>
 <body>
@@ -84,6 +93,11 @@
     <h1 id="blockerTitle">1FPS</h1>
     <p id="blockerSub">클릭해서 게임 시작 (마우스 잠금)</p>
     <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1/2/3 무기교체</p>
+    <div id="mapSelect">
+      <button class="mapBtn" data-map="urban">도심 폐허</button>
+      <button class="mapBtn" data-map="desert">사막 협곡</button>
+      <button class="mapBtn" data-map="snow">설상 기지</button>
+    </div>
   </div>
 
   <div id="hud">

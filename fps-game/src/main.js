@@ -57,7 +57,7 @@ sun.shadow.camera.bottom = -40;
 scene.add(sun);
 
 // ----- level: ground + walls + cover boxes -----------------------------
-const colliders = []; // { box: THREE.Box3 }
+const colliders = []; // meshes used for AABB collision checks
 
 function makeBoxMesh(w, h, d, color) {
   const mesh = new THREE.Mesh(
@@ -75,36 +75,80 @@ function addCollider(mesh) {
 }
 
 const ARENA = 60;
-const ground = makeBoxMesh(ARENA, 1, ARENA, 0x2a3038);
-ground.position.y = -0.5;
-ground.receiveShadow = true;
-scene.add(ground);
-
-const wallMat = 0x394452;
 const wallHeight = 6;
-const wallDefs = [
-  [ARENA, wallHeight, 1, 0, wallHeight / 2, -ARENA / 2],
-  [ARENA, wallHeight, 1, 0, wallHeight / 2, ARENA / 2],
-  [1, wallHeight, ARENA, -ARENA / 2, wallHeight / 2, 0],
-  [1, wallHeight, ARENA, ARENA / 2, wallHeight / 2, 0],
-];
-for (const [w, h, d, x, y, z] of wallDefs) {
-  const wall = makeBoxMesh(w, h, d, wallMat);
-  wall.position.set(x, y, z);
-  scene.add(wall);
-  addCollider(wall);
+
+const MAPS = {
+  urban: {
+    name: '도심 폐허',
+    sky: 0x2b3850, fogNear: 25, fogFar: 80,
+    ground: 0x2a3038, wall: 0x394452, cover: 0x55483a,
+    coverPositions: [
+      [4, -10], [-6, -4], [8, 5], [-10, 10], [0, 15], [-14, -14], [12, -16], [16, 6], [-4, 20], [6, -22],
+    ],
+  },
+  desert: {
+    name: '사막 협곡',
+    sky: 0xd9c79e, fogNear: 20, fogFar: 70,
+    ground: 0xc2a878, wall: 0x8a7152, cover: 0x6b5636,
+    coverPositions: [
+      [6, -8], [-8, -2], [10, 8], [-12, 12], [2, 18], [-16, -10], [14, -18], [18, 4], [-6, 22], [8, -24],
+    ],
+  },
+  snow: {
+    name: '설상 기지',
+    sky: 0xc7d6e6, fogNear: 18, fogFar: 65,
+    ground: 0xdfe8f0, wall: 0x8fa6bb, cover: 0x5c6b78,
+    coverPositions: [
+      [3, -9], [-7, -3], [9, 6], [-9, 11], [-1, 16], [-13, -13], [13, -15], [15, 7], [-3, 19], [5, -21],
+    ],
+  },
+};
+
+let currentMapKey = 'urban';
+let levelMeshes = [];
+
+function clearLevel() {
+  for (const mesh of levelMeshes) scene.remove(mesh);
+  levelMeshes = [];
+  colliders.length = 0;
 }
 
-// scattered cover crates
-const coverPositions = [
-  [4, -10], [-6, -4], [8, 5], [-10, 10], [0, 15], [-14, -14], [12, -16], [16, 6], [-4, 20], [6, -22],
-];
-for (const [x, z] of coverPositions) {
-  const size = 1.6 + Math.random() * 1.2;
-  const crate = makeBoxMesh(size, size, size, 0x55483a);
-  crate.position.set(x, size / 2, z);
-  scene.add(crate);
-  addCollider(crate);
+function buildLevel(key) {
+  clearLevel();
+  const cfg = MAPS[key];
+  currentMapKey = key;
+
+  scene.background = new THREE.Color(cfg.sky);
+  scene.fog = new THREE.Fog(cfg.sky, cfg.fogNear, cfg.fogFar);
+
+  const ground = makeBoxMesh(ARENA, 1, ARENA, cfg.ground);
+  ground.position.y = -0.5;
+  ground.receiveShadow = true;
+  scene.add(ground);
+  levelMeshes.push(ground);
+
+  const wallDefs = [
+    [ARENA, wallHeight, 1, 0, wallHeight / 2, -ARENA / 2],
+    [ARENA, wallHeight, 1, 0, wallHeight / 2, ARENA / 2],
+    [1, wallHeight, ARENA, -ARENA / 2, wallHeight / 2, 0],
+    [1, wallHeight, ARENA, ARENA / 2, wallHeight / 2, 0],
+  ];
+  for (const [w, h, d, x, y, z] of wallDefs) {
+    const wall = makeBoxMesh(w, h, d, cfg.wall);
+    wall.position.set(x, y, z);
+    scene.add(wall);
+    addCollider(wall);
+    levelMeshes.push(wall);
+  }
+
+  for (const [x, z] of cfg.coverPositions) {
+    const size = 1.6 + Math.random() * 1.2;
+    const crate = makeBoxMesh(size, size, size, cfg.cover);
+    crate.position.set(x, size / 2, z);
+    scene.add(crate);
+    addCollider(crate);
+    levelMeshes.push(crate);
+  }
 }
 
 // ----- targets (simple enemies) ---------------------------------------
@@ -574,6 +618,24 @@ blocker.addEventListener('click', () => {
   if (gameOver) respawnPlayer();
 });
 
+// ----- map selection ----------------------------------------------------
+const mapButtons = document.querySelectorAll('.mapBtn');
+function selectMap(key) {
+  if (!MAPS[key] || key === currentMapKey) return;
+  buildLevel(key);
+  yawObject.position.set(0, 1.7, 8);
+  for (const target of targets.slice()) killTarget(target, false, true);
+  for (let i = 0; i < 4; i++) spawnRandomTarget();
+  for (const btn of mapButtons) btn.classList.toggle('active', btn.dataset.map === key);
+}
+for (const btn of mapButtons) {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectMap(btn.dataset.map);
+  });
+}
+for (const btn of mapButtons) btn.classList.toggle('active', btn.dataset.map === currentMapKey);
+
 function updateMovement(dt) {
   const forward = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
   const strafe = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
@@ -733,5 +795,6 @@ function animate() {
 
   renderer.render(scene, camera);
 }
+buildLevel(currentMapKey);
 for (let i = 0; i < 4; i++) spawnRandomTarget();
 animate();
