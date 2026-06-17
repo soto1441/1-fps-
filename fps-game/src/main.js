@@ -307,9 +307,63 @@ weaponKnife.position.set(0.24, -0.22, -0.4);
 weaponKnife.visible = false;
 camera.add(weaponKnife);
 
-const weaponModels = { rifle: weaponRifle, pistol: weaponPistol, knife: weaponKnife };
-const weaponMuzzles = { rifle: rifleMuzzle, pistol: pistolMuzzle, knife: null };
-const weaponRestZ = { rifle: weaponRifle.position.z, pistol: weaponPistol.position.z, knife: weaponKnife.position.z };
+// shotgun
+const weaponShotgun = new THREE.Group();
+{
+  const gunBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.14, 0.16, 0.42),
+    new THREE.MeshStandardMaterial({ color: 0x4a3a26, roughness: 0.55, metalness: 0.3 })
+  );
+  const gunBarrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.04, 0.04, 0.4, 12),
+    new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.3, metalness: 0.8 })
+  );
+  gunBarrel.rotation.x = Math.PI / 2;
+  gunBarrel.position.set(0, 0.02, -0.4);
+  const pump = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.08, 0.16),
+    new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.6 })
+  );
+  pump.position.set(0, -0.04, -0.32);
+  weaponShotgun.add(gunBody, gunBarrel, pump);
+}
+weaponShotgun.position.set(0.28, -0.26, -0.5);
+weaponShotgun.visible = false;
+camera.add(weaponShotgun);
+const shotgunMuzzle = buildMuzzle(weaponShotgun, new THREE.Vector3(0, 0.02, -0.58));
+
+// sniper
+const weaponSniper = new THREE.Group();
+{
+  const gunBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.12, 0.7),
+    new THREE.MeshStandardMaterial({ color: 0x23262a, roughness: 0.4, metalness: 0.6 })
+  );
+  const gunBarrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.02, 0.02, 0.4, 12),
+    new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.3, metalness: 0.8 })
+  );
+  gunBarrel.rotation.x = Math.PI / 2;
+  gunBarrel.position.set(0, 0.02, -0.55);
+  const scope = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.025, 0.2, 12),
+    new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.2, metalness: 0.9 })
+  );
+  scope.rotation.x = Math.PI / 2;
+  scope.position.set(0, 0.09, -0.1);
+  weaponSniper.add(gunBody, gunBarrel, scope);
+}
+weaponSniper.position.set(0.3, -0.24, -0.65);
+weaponSniper.visible = false;
+camera.add(weaponSniper);
+const sniperMuzzle = buildMuzzle(weaponSniper, new THREE.Vector3(0, 0.02, -0.75));
+
+const weaponModels = { rifle: weaponRifle, pistol: weaponPistol, knife: weaponKnife, shotgun: weaponShotgun, sniper: weaponSniper };
+const weaponMuzzles = { rifle: rifleMuzzle, pistol: pistolMuzzle, knife: null, shotgun: shotgunMuzzle, sniper: sniperMuzzle };
+const weaponRestZ = {
+  rifle: weaponRifle.position.z, pistol: weaponPistol.position.z, knife: weaponKnife.position.z,
+  shotgun: weaponShotgun.position.z, sniper: weaponSniper.position.z,
+};
 
 // ----- input / pointer lock --------------------------------------------
 const keys = {};
@@ -403,6 +457,19 @@ const WEAPONS = {
     range: 2.4, fireRate: 0.45, dmgBody: 60, dmgHead: 60,
     recoil: 0, reloading: false,
   },
+  shotgun: {
+    name: 'SHOTGUN', melee: false, auto: false,
+    magSize: 6, ammo: 6, reserve: 24,
+    fireRate: 0.7, reloadTime: 1800, dmgBody: 16, dmgHead: 26,
+    pellets: 8, spreadDeg: 5,
+    recoil: 0.07, reloading: false,
+  },
+  sniper: {
+    name: 'SNIPER', melee: false, auto: false,
+    magSize: 4, ammo: 4, reserve: 12,
+    fireRate: 1.5, reloadTime: 2000, dmgBody: 80, dmgHead: 300,
+    recoil: 0.09, reloading: false,
+  },
 };
 
 const INFINITE_AMMO = true; // shooting-range mode: never run dry
@@ -439,6 +506,8 @@ document.addEventListener('keydown', (e) => {
   if (e.code === 'Digit1') setWeapon('rifle');
   if (e.code === 'Digit2') setWeapon('pistol');
   if (e.code === 'Digit3') setWeapon('knife');
+  if (e.code === 'Digit4') setWeapon('shotgun');
+  if (e.code === 'Digit5') setWeapon('sniper');
 });
 
 updateAmmoHud();
@@ -510,28 +579,46 @@ function tryShoot() {
   hud.crosshair.classList.add('shoot');
   setTimeout(() => hud.crosshair.classList.remove('shoot'), 60);
 
-  // raycast from camera center
+  // raycast from camera center (pellet weapons fire multiple raycasts with spread)
   const range = w.melee ? w.range : 100;
-  raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
-  raycaster.far = range;
-  const hits = raycaster.intersectObjects(shootables(), false);
-  if (hits.length > 0) {
-    const hit = hits[0];
-    const target = targets.find((t) => t.userData.body === hit.object || t.userData.head === hit.object);
-    if (target && target.userData.alive) {
-      const headshot = hit.object === target.userData.head;
-      const dmg = headshot ? w.dmgHead : w.dmgBody;
-      target.userData.hp -= dmg;
-      updateTargetHealthBar(target);
-      playHit();
-      hud.hitmarker.classList.add('show');
-      setTimeout(() => hud.hitmarker.classList.remove('show'), 90);
-      if (target.userData.hp <= 0) {
-        killTarget(target, headshot);
+  const shotCount = w.pellets || 1;
+  let anyHit = false;
+  const damageByTarget = new Map();
+  let headshotAny = false;
+  for (let i = 0; i < shotCount; i++) {
+    let ndcX = 0, ndcY = 0;
+    if (w.pellets) {
+      const spread = (w.spreadDeg * Math.PI / 180);
+      ndcX = (Math.random() - 0.5) * spread;
+      ndcY = (Math.random() - 0.5) * spread;
+    }
+    raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
+    raycaster.far = range;
+    const hits = raycaster.intersectObjects(shootables(), false);
+    if (hits.length > 0) {
+      const hit = hits[0];
+      const target = targets.find((t) => t.userData.body === hit.object || t.userData.head === hit.object);
+      if (target && target.userData.alive) {
+        anyHit = true;
+        const headshot = hit.object === target.userData.head;
+        if (headshot) headshotAny = true;
+        const dmg = headshot ? w.dmgHead : w.dmgBody;
+        damageByTarget.set(target, (damageByTarget.get(target) || 0) + dmg);
       }
     }
   }
   raycaster.far = Infinity;
+
+  if (anyHit) {
+    playHit();
+    hud.hitmarker.classList.add('show');
+    setTimeout(() => hud.hitmarker.classList.remove('show'), 90);
+    for (const [target, dmg] of damageByTarget) {
+      target.userData.hp -= dmg;
+      updateTargetHealthBar(target);
+      if (target.userData.hp <= 0) killTarget(target, headshotAny);
+    }
+  }
 }
 
 function killTarget(target, headshot, silent) {
