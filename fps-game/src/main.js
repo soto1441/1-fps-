@@ -25,8 +25,9 @@ const hud = {
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.6;
+renderer.toneMappingExposure = 1.1;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
@@ -45,9 +46,9 @@ yawObject.add(pitchObject);
 scene.add(yawObject);
 
 // ----- lighting -------------------------------------------------------
-scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x33384a, 1.6));
-scene.add(new THREE.AmbientLight(0xffffff, 0.5));
-const sun = new THREE.DirectionalLight(0xffffff, 2.4);
+scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x3a3f4e, 1.05));
+scene.add(new THREE.AmbientLight(0xffffff, 0.28));
+const sun = new THREE.DirectionalLight(0xfff3d8, 2.6);
 sun.position.set(20, 30, 10);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
@@ -55,16 +56,51 @@ sun.shadow.camera.left = -40;
 sun.shadow.camera.right = 40;
 sun.shadow.camera.top = 40;
 sun.shadow.camera.bottom = -40;
+sun.shadow.bias = -0.0006;
+sun.shadow.normalBias = 0.02;
 scene.add(sun);
 
 // ----- level: ground + walls + cover boxes -----------------------------
 const colliders = []; // meshes used for AABB collision checks
 
-function makeBoxMesh(w, h, d, color) {
-  const mesh = new THREE.Mesh(
-    new THREE.BoxGeometry(w, h, d),
-    new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.05 })
-  );
+// procedural tiled texture: subtle per-tile noise/grout lines so flat
+// ground/wall surfaces aren't a single dead-flat color under the sun light
+function makeNoiseTexture(baseHex, { tile = 64, grid = 8, noise = 14 } = {}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = tile;
+  const ctx2d = canvas.getContext('2d');
+  const base = new THREE.Color(baseHex);
+  ctx2d.fillStyle = `rgb(${base.r * 255}, ${base.g * 255}, ${base.b * 255})`;
+  ctx2d.fillRect(0, 0, tile, tile);
+  const imgData = ctx2d.getImageData(0, 0, tile, tile);
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    const n = (Math.random() - 0.5) * noise;
+    imgData.data[i] = Math.max(0, Math.min(255, imgData.data[i] + n));
+    imgData.data[i + 1] = Math.max(0, Math.min(255, imgData.data[i + 1] + n));
+    imgData.data[i + 2] = Math.max(0, Math.min(255, imgData.data[i + 2] + n));
+  }
+  ctx2d.putImageData(imgData, 0, 0);
+  ctx2d.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx2d.lineWidth = 1;
+  for (let i = 0; i <= tile; i += tile / grid) {
+    ctx2d.beginPath(); ctx2d.moveTo(i, 0); ctx2d.lineTo(i, tile); ctx2d.stroke();
+    ctx2d.beginPath(); ctx2d.moveTo(0, i); ctx2d.lineTo(tile, i); ctx2d.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  texture.colorSpace = THREE.SRGBColorSpace;
+  return texture;
+}
+
+function makeBoxMesh(w, h, d, color, texRepeat) {
+  const material = new THREE.MeshStandardMaterial({ color, roughness: 0.85, metalness: 0.05 });
+  if (texRepeat) {
+    const tex = makeNoiseTexture(color);
+    tex.repeat.set(texRepeat[0], texRepeat[1]);
+    material.map = tex;
+    material.color.set(0xffffff);
+  }
+  const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
   mesh.castShadow = true;
   mesh.receiveShadow = true;
   return mesh;
@@ -166,7 +202,7 @@ function buildLevel(key) {
   scene.background = new THREE.Color(cfg.sky);
   scene.fog = new THREE.Fog(cfg.sky, cfg.fogNear, cfg.fogFar);
 
-  const ground = makeBoxMesh(ARENA, 1, ARENA, cfg.ground);
+  const ground = makeBoxMesh(ARENA, 1, ARENA, cfg.ground, [ARENA / 3, ARENA / 3]);
   ground.position.y = -0.5;
   ground.receiveShadow = true;
   scene.add(ground);
@@ -179,7 +215,7 @@ function buildLevel(key) {
     [1, wallHeight, ARENA, ARENA / 2, wallHeight / 2, 0],
   ];
   for (const [w, h, d, x, y, z] of wallDefs) {
-    const wall = makeBoxMesh(w, h, d, cfg.wall);
+    const wall = makeBoxMesh(w, h, d, cfg.wall, [Math.max(w, d) / 6, wallHeight / 3]);
     wall.position.set(x, y, z);
     scene.add(wall);
     addCollider(wall);
@@ -239,16 +275,32 @@ function spawnTarget(x, z) {
   const group = new THREE.Group();
   const body = new THREE.Mesh(
     new THREE.CapsuleGeometry(0.45, 1.2, 6, 12),
-    new THREE.MeshStandardMaterial({ color: 0xb0392f, roughness: 0.6 })
+    new THREE.MeshStandardMaterial({ color: 0xb0392f, roughness: 0.55, metalness: 0.05 })
   );
   body.position.y = 1.1;
   body.castShadow = true;
+
+  // chest vest accent for a clearer silhouette / readable hitbox
+  const vest = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.46, 0.4, 0.7, 12, 1, true, 0, Math.PI),
+    new THREE.MeshStandardMaterial({ color: 0x2c2c30, roughness: 0.7, side: THREE.DoubleSide })
+  );
+  vest.rotation.y = -Math.PI / 2;
+  vest.position.y = 1.35;
+  vest.castShadow = true;
+
   const head = new THREE.Mesh(
     new THREE.SphereGeometry(0.3, 16, 16),
-    new THREE.MeshStandardMaterial({ color: 0xd9a374, roughness: 0.6 })
+    new THREE.MeshStandardMaterial({ color: 0xd9a374, roughness: 0.55 })
   );
   head.position.y = 2.0;
   head.castShadow = true;
+
+  const visor = new THREE.Mesh(
+    new THREE.BoxGeometry(0.42, 0.12, 0.1),
+    new THREE.MeshStandardMaterial({ color: 0x171a1f, roughness: 0.3, metalness: 0.4 })
+  );
+  visor.position.set(0, 2.04, -0.24);
 
   const gun = new THREE.Mesh(
     new THREE.BoxGeometry(0.08, 0.08, 0.4),
@@ -258,7 +310,7 @@ function spawnTarget(x, z) {
   const muzzleLight = new THREE.PointLight(0xffaa55, 0, 5, 2);
   muzzleLight.position.set(0.32, 1.25, -0.3);
 
-  group.add(body, head, gun, muzzleLight);
+  group.add(body, vest, head, visor, gun, muzzleLight);
   group.position.set(x, 0, z);
 
   // floating health bar (kept as a separate top-level object so the
