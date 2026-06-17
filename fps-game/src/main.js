@@ -109,6 +109,17 @@ for (const [x, z] of coverPositions) {
 
 // ----- targets (simple enemies) ---------------------------------------
 const targets = [];
+const HEALTH_BAR_WIDTH = 0.8;
+
+function updateTargetHealthBar(target) {
+  const { barFill, hp, maxHp } = target.userData;
+  const frac = Math.max(0, hp / maxHp);
+  const w = HEALTH_BAR_WIDTH * frac;
+  barFill.scale.x = Math.max(0.0001, w);
+  barFill.position.x = -(HEALTH_BAR_WIDTH - w) / 2;
+  barFill.material.color.setHex(frac > 0.5 ? 0xff3b3b : frac > 0.25 ? 0xff9d3b : 0xff2222);
+}
+
 function spawnTarget(x, z) {
   const group = new THREE.Group();
   const body = new THREE.Mesh(
@@ -134,14 +145,33 @@ function spawnTarget(x, z) {
 
   group.add(body, head, gun, muzzleLight);
   group.position.set(x, 0, z);
+
+  // floating health bar (kept as a separate top-level object so the
+  // enemy's facing rotation doesn't drag the bar's fill offset around)
+  const barBack = new THREE.Sprite(
+    new THREE.SpriteMaterial({ color: 0x1a1a1a, opacity: 0.75, transparent: true, depthTest: false })
+  );
+  barBack.scale.set(HEALTH_BAR_WIDTH + 0.06, 0.16, 1);
+  const barFill = new THREE.Sprite(
+    new THREE.SpriteMaterial({ color: 0xff3b3b, depthTest: false })
+  );
+  barFill.scale.set(HEALTH_BAR_WIDTH, 0.1, 1);
+  barFill.renderOrder = 1;
+  const healthBar = new THREE.Group();
+  healthBar.add(barBack, barFill);
+  healthBar.position.set(x, 2.55, z);
+  scene.add(healthBar);
+
   group.userData = {
-    hp: 100, alive: true, body, head, gun, muzzleLight,
+    hp: 100, maxHp: 100, alive: true, body, head, gun, muzzleLight,
+    healthBar, barFill,
     baseY: 0, t: Math.random() * Math.PI * 2,
     attackCooldown: 1 + Math.random() * 1.5,
     attackRange: 22,
   };
   scene.add(group);
   targets.push(group);
+  updateTargetHealthBar(group);
 }
 const MAX_TARGETS = 8;
 const SPAWN_INTERVAL = 4;
@@ -446,6 +476,7 @@ function tryShoot() {
       const headshot = hit.object === target.userData.head;
       const dmg = headshot ? w.dmgHead : w.dmgBody;
       target.userData.hp -= dmg;
+      updateTargetHealthBar(target);
       playHit();
       hud.hitmarker.classList.add('show');
       setTimeout(() => hud.hitmarker.classList.remove('show'), 90);
@@ -460,6 +491,7 @@ function tryShoot() {
 function killTarget(target, headshot, silent) {
   target.userData.alive = false;
   scene.remove(target);
+  scene.remove(target.userData.healthBar);
   targets.splice(targets.indexOf(target), 1);
   if (!silent) addKillFeed(headshot ? '헤드샷 ✕' : '제거 ✕');
 }
@@ -607,6 +639,8 @@ function updateTargets(dt, t) {
     target.userData.t += dt;
     target.position.x += Math.sin(target.userData.t * 0.6) * dt * 0.4;
     target.position.y = 0;
+    target.userData.healthBar.position.x = target.position.x;
+    target.userData.healthBar.position.z = target.position.z;
   }
 }
 
