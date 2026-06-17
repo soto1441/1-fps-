@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <title>1FPS</title>
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: #000; font-family: 'Courier New', monospace; }
+    canvas { display: block; }
+
+    #hud {
+      position: fixed; inset: 0; pointer-events: none; color: #ddd;
+      text-shadow: 0 0 4px #000;
+    }
+    #crosshair {
+      position: absolute; top: 50%; left: 50%; width: 22px; height: 22px;
+      transform: translate(-50%, -50%);
+    }
+    #crosshair::before, #crosshair::after {
+      content: ''; position: absolute; background: #d6ffb0;
+      box-shadow: 0 0 3px rgba(0,0,0,.8);
+    }
+    #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
+    #crosshair::after  { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
+    #crosshair.shoot { filter: brightness(2.2); }
+
+    #bottomLeft {
+      position: absolute; left: 24px; bottom: 20px; font-size: 28px; font-weight: bold;
+      letter-spacing: 1px;
+    }
+    #bottomLeft span { color: #9be86b; }
+    #bottomRight {
+      position: absolute; right: 24px; bottom: 20px; font-size: 28px; font-weight: bold; text-align: right;
+    }
+    #bottomRight span { color: #ff5d5d; }
+
+    #hitmarker {
+      position: absolute; top: 50%; left: 50%; width: 28px; height: 28px;
+      transform: translate(-50%, -50%); opacity: 0; transition: opacity .08s;
+    }
+    #hitmarker::before, #hitmarker::after { content: ''; position: absolute; background: #fff; }
+    #hitmarker::before { width: 100%; height: 2px; top: 50%; transform: translateY(-50%) rotate(45deg); }
+    #hitmarker::after  { width: 100%; height: 2px; top: 50%; transform: translateY(-50%) rotate(-45deg); }
+    #hitmarker.show { opacity: 1; }
+
+    #flash {
+      position: fixed; inset: 0; background: #ff0000; opacity: 0; pointer-events: none;
+      transition: opacity .15s;
+    }
+    #flash.show { opacity: .25; }
+
+    #killfeed {
+      position: absolute; top: 16px; right: 16px; font-size: 14px; color: #ffce5c; text-align: right;
+    }
+
+    #blocker {
+      position: fixed; inset: 0; background: rgba(0,0,0,.85); display: flex;
+      align-items: center; justify-content: center; flex-direction: column; color: #eee; cursor: pointer;
+      z-index: 10;
+    }
+    #blocker h1 { font-size: 38px; letter-spacing: 4px; color: #9be86b; margin-bottom: 6px; }
+    #blocker p { font-size: 14px; color: #aaa; margin: 4px 0; }
+    #blocker.hidden { display: none; }
+  </style>
+</head>
+<body>
+  <div id="blocker">
+    <h1>1FPS</h1>
+    <p>클릭해서 게임 시작 (마우스 잠금)</p>
+    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 사격 · R 재장전</p>
+  </div>
+
+  <div id="hud">
+    <div id="crosshair"></div>
+    <div id="hitmarker"></div>
+    <div id="bottomLeft">AMMO <span id="ammo">12</span>/<span id="reserve">48</span></div>
+    <div id="bottomRight">HP <span id="hp">100</span></div>
+    <div id="killfeed" id="killfeedList"></div>
+  </div>
+  <div id="flash"></div>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://unpkg.com/three@0.160.0/build/three.module.js"
+      }
+    }
+  </script>
+  <script type="module" src="./src/main.js"></script>
+</body>
+</html>
