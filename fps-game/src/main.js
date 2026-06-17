@@ -245,10 +245,17 @@ let locked = false;
 document.addEventListener('keydown', (e) => (keys[e.code] = true));
 document.addEventListener('keyup', (e) => (keys[e.code] = false));
 
+function clearInputState() {
+  for (const key in keys) keys[key] = false;
+  mouseDown = false;
+}
+window.addEventListener('blur', clearInputState);
+
 blocker.addEventListener('click', () => renderer.domElement.requestPointerLock());
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === renderer.domElement;
   blocker.classList.toggle('hidden', locked);
+  if (!locked) clearInputState();
 });
 
 document.addEventListener('mousemove', (e) => {
@@ -309,23 +316,22 @@ const WEAPONS = {
     name: 'RIFLE', melee: false, auto: true,
     magSize: 12, ammo: 12, reserve: 48,
     fireRate: 0.14, reloadTime: 1200, dmgBody: 34, dmgHead: 100,
-    recoil: 0.045,
+    recoil: 0.045, reloading: false,
   },
   pistol: {
     name: 'PISTOL', melee: false, auto: false,
     magSize: 8, ammo: 8, reserve: 32,
     fireRate: 0.28, reloadTime: 900, dmgBody: 22, dmgHead: 70,
-    recoil: 0.03,
+    recoil: 0.03, reloading: false,
   },
   knife: {
     name: 'KNIFE', melee: true, auto: false,
     range: 2.4, fireRate: 0.45, dmgBody: 60, dmgHead: 60,
-    recoil: 0,
+    recoil: 0, reloading: false,
   },
 };
 
 let currentWeaponKey = 'rifle';
-let reloading = false;
 let fireCooldown = 0;
 
 function currentWeapon() {
@@ -347,7 +353,6 @@ function updateAmmoHud() {
 function setWeapon(key) {
   if (!WEAPONS[key] || key === currentWeaponKey) return;
   currentWeaponKey = key;
-  reloading = false;
   fireCooldown = 0.15;
   kickTimer = 0;
   for (const k in weaponModels) weaponModels[k].visible = k === key;
@@ -363,16 +368,17 @@ document.addEventListener('keydown', (e) => {
 updateAmmoHud();
 
 function reload() {
+  if (!locked) return;
   const w = currentWeapon();
-  if (w.melee || reloading || w.ammo === w.magSize || w.reserve <= 0) return;
-  reloading = true;
+  if (w.melee || w.reloading || w.ammo === w.magSize || w.reserve <= 0) return;
+  w.reloading = true;
   setTimeout(() => {
     const need = w.magSize - w.ammo;
     const take = Math.min(need, w.reserve);
     w.ammo += take;
     w.reserve -= take;
-    reloading = false;
-    updateAmmoHud();
+    w.reloading = false;
+    if (w === currentWeapon()) updateAmmoHud();
   }, w.reloadTime);
 }
 
@@ -399,7 +405,7 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 function tryShoot() {
   if (gameOver) return;
   const w = currentWeapon();
-  if (fireCooldown > 0 || reloading) return;
+  if (fireCooldown > 0 || w.reloading) return;
 
   if (!w.melee) {
     if (w.ammo <= 0) { playDry(); return; }
@@ -451,11 +457,11 @@ function tryShoot() {
   raycaster.far = Infinity;
 }
 
-function killTarget(target, headshot) {
+function killTarget(target, headshot, silent) {
   target.userData.alive = false;
   scene.remove(target);
   targets.splice(targets.indexOf(target), 1);
-  addKillFeed(headshot ? '헤드샷 ✕' : '제거 ✕');
+  if (!silent) addKillFeed(headshot ? '헤드샷 ✕' : '제거 ✕');
 }
 
 function addKillFeed(text) {
@@ -526,7 +532,7 @@ function respawnPlayer() {
   updateHealthHud();
   blockerTitle.textContent = '1FPS';
   blockerSub.textContent = '클릭해서 게임 시작 (마우스 잠금)';
-  for (const target of targets.slice()) killTarget(target, false);
+  for (const target of targets.slice()) killTarget(target, false, true);
   for (let i = 0; i < 4; i++) spawnRandomTarget();
 }
 
