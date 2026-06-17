@@ -99,7 +99,6 @@ for (const [x, z] of coverPositions) {
   const size = 1.6 + Math.random() * 1.2;
   const crate = makeBoxMesh(size, size, size, 0x55483a);
   crate.position.set(x, size / 2, z);
-  crate.rotation.y = Math.random() * Math.PI;
   scene.add(crate);
   addCollider(crate);
 }
