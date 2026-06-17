@@ -361,6 +361,8 @@ const WEAPONS = {
   },
 };
 
+const INFINITE_AMMO = true; // shooting-range mode: never run dry
+
 let currentWeaponKey = 'rifle';
 let fireCooldown = 0;
 
@@ -371,7 +373,7 @@ function currentWeapon() {
 function updateAmmoHud() {
   const w = currentWeapon();
   hud.weaponName.textContent = w.name;
-  if (w.melee) {
+  if (w.melee || INFINITE_AMMO) {
     hud.ammo.textContent = '∞';
     hud.reserve.textContent = '-';
   } else {
@@ -398,7 +400,7 @@ document.addEventListener('keydown', (e) => {
 updateAmmoHud();
 
 function reload() {
-  if (!locked) return;
+  if (!locked || INFINITE_AMMO) return;
   const w = currentWeapon();
   if (w.melee || w.reloading || w.ammo === w.magSize || w.reserve <= 0) return;
   w.reloading = true;
@@ -437,7 +439,7 @@ function tryShoot() {
   const w = currentWeapon();
   if (fireCooldown > 0 || w.reloading) return;
 
-  if (!w.melee) {
+  if (!w.melee && !INFINITE_AMMO) {
     if (w.ammo <= 0) { playDry(); return; }
     w.ammo--;
     updateAmmoHud();
