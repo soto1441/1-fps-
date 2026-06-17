@@ -18,6 +18,7 @@ const hud = {
   hitmarker: document.getElementById('hitmarker'),
   flash: document.getElementById('flash'),
   killfeed: document.getElementById('killfeedList'),
+  round: document.getElementById('roundLine'),
 };
 
 // ----- renderer / scene / camera -----------------------------------
@@ -697,7 +698,45 @@ function killTarget(target, headshot, silent) {
   scene.remove(target);
   scene.remove(target.userData.healthBar);
   targets.splice(targets.indexOf(target), 1);
-  if (!silent) addKillFeed(headshot ? '헤드샷 ✕' : '제거 ✕');
+  if (!silent) {
+    addKillFeed(headshot ? '헤드샷 ✕' : '제거 ✕');
+    checkWaveClear();
+  }
+}
+
+// ----- round system (clear a wave of targets to earn 1 point; first to
+// ROUNDS_TO_WIN points wins, mirroring RIVALS' best-of-5 match format) ------
+const ROUNDS_TO_WIN = 5;
+let roundScore = 0;
+let roundTransition = false;
+
+function updateRoundHud() {
+  hud.round.textContent = `ROUND ${roundScore}/${ROUNDS_TO_WIN}`;
+}
+
+function checkWaveClear() {
+  if (roundTransition || gameOver || targets.length > 0) return;
+  roundTransition = true;
+  roundScore++;
+  updateRoundHud();
+  addKillFeed(`라운드 클리어 ${roundScore}/${ROUNDS_TO_WIN}`);
+  if (roundScore >= ROUNDS_TO_WIN) {
+    setTimeout(winGame, 600);
+  } else {
+    setTimeout(() => {
+      roundTransition = false;
+      for (let i = 0; i < 4; i++) spawnRandomTarget();
+    }, 1200);
+  }
+}
+
+function winGame() {
+  gameOver = true;
+  mouseDown = false;
+  document.exitPointerLock();
+  blockerTitle.textContent = 'VICTORY';
+  blockerSub.textContent = `${ROUNDS_TO_WIN}라운드 클리어! 클릭해서 다시 시작`;
+  blocker.classList.remove('hidden');
 }
 
 function addKillFeed(text) {
@@ -764,6 +803,9 @@ function killPlayer() {
 function respawnPlayer() {
   playerHp = PLAYER_MAX_HP;
   gameOver = false;
+  roundScore = 0;
+  roundTransition = false;
+  updateRoundHud();
   yawObject.position.set(0, 1.7, 8);
   verticalVelocity = 0;
   updateHealthHud();
@@ -783,6 +825,9 @@ function selectMap(key) {
   if (!MAPS[key] || key === currentMapKey) return;
   buildLevel(key);
   yawObject.position.set(0, 1.7, 8);
+  roundScore = 0;
+  roundTransition = false;
+  updateRoundHud();
   for (const target of targets.slice()) killTarget(target, false, true);
   for (let i = 0; i < 4; i++) spawnRandomTarget();
   for (const btn of mapButtons) btn.classList.toggle('active', btn.dataset.map === key);
@@ -967,4 +1012,5 @@ function animate() {
 }
 buildLevel(currentMapKey);
 for (let i = 0; i < 4; i++) spawnRandomTarget();
+updateRoundHud();
 animate();
