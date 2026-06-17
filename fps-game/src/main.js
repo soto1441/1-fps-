@@ -20,11 +20,14 @@ const hud = {
 const renderer = new THREE.WebGLRenderer({ antialias: true });
 renderer.setSize(window.innerWidth, window.innerHeight);
 renderer.shadowMap.enabled = true;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.6;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0b0e14);
-scene.fog = new THREE.Fog(0x0b0e14, 15, 70);
+scene.background = new THREE.Color(0x2b3850);
+scene.fog = new THREE.Fog(0x2b3850, 25, 80);
 
 const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.1, 1000);
 
@@ -37,8 +40,9 @@ yawObject.add(pitchObject);
 scene.add(yawObject);
 
 // ----- lighting -------------------------------------------------------
-scene.add(new THREE.HemisphereLight(0x8899aa, 0x222233, 0.9));
-const sun = new THREE.DirectionalLight(0xffffff, 1.1);
+scene.add(new THREE.HemisphereLight(0xbfd4ff, 0x33384a, 1.6));
+scene.add(new THREE.AmbientLight(0xffffff, 0.5));
+const sun = new THREE.DirectionalLight(0xffffff, 2.4);
 sun.position.set(20, 30, 10);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
