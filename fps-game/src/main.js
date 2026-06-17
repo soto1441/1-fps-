@@ -6,10 +6,14 @@ import * as THREE from 'three';
 ---------------------------------------------------------------------- */
 
 const blocker = document.getElementById('blocker');
+const blockerTitle = document.getElementById('blockerTitle');
+const blockerSub = document.getElementById('blockerSub');
 const hud = {
   ammo: document.getElementById('ammo'),
   reserve: document.getElementById('reserve'),
   hp: document.getElementById('hp'),
+  weaponName: document.getElementById('weaponName'),
+  healthbarFill: document.getElementById('healthbarFill'),
   crosshair: document.getElementById('crosshair'),
   hitmarker: document.getElementById('hitmarker'),
   flash: document.getElementById('flash'),
@@ -119,9 +123,23 @@ function spawnTarget(x, z) {
   );
   head.position.y = 2.0;
   head.castShadow = true;
-  group.add(body, head);
+
+  const gun = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08, 0.08, 0.4),
+    new THREE.MeshStandardMaterial({ color: 0x14151a, roughness: 0.4, metalness: 0.6 })
+  );
+  gun.position.set(0.32, 1.25, -0.1);
+  const muzzleLight = new THREE.PointLight(0xffaa55, 0, 5, 2);
+  muzzleLight.position.set(0.32, 1.25, -0.3);
+
+  group.add(body, head, gun, muzzleLight);
   group.position.set(x, 0, z);
-  group.userData = { hp: 100, alive: true, body, head, baseY: 0, t: Math.random() * Math.PI * 2 };
+  group.userData = {
+    hp: 100, alive: true, body, head, gun, muzzleLight,
+    baseY: 0, t: Math.random() * Math.PI * 2,
+    attackCooldown: 1 + Math.random() * 1.5,
+    attackRange: 22,
+  };
   scene.add(group);
   targets.push(group);
 }
@@ -144,32 +162,80 @@ function spawnRandomTarget() {
 }
 
 
-// ----- weapon viewmodel --------------------------------------------------
-const weapon = new THREE.Group();
-const gunBody = new THREE.Mesh(
-  new THREE.BoxGeometry(0.12, 0.14, 0.55),
-  new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.4, metalness: 0.6 })
-);
-const gunBarrel = new THREE.Mesh(
-  new THREE.CylinderGeometry(0.025, 0.025, 0.3, 12),
-  new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.3, metalness: 0.8 })
-);
-gunBarrel.rotation.x = Math.PI / 2;
-gunBarrel.position.set(0, 0.02, -0.45);
-weapon.add(gunBody, gunBarrel);
-weapon.position.set(0.28, -0.25, -0.55);
-camera.add(weapon);
+// ----- weapon viewmodels ---------------------------------------------------
+function buildMuzzle(parent, pos) {
+  const light = new THREE.PointLight(0xffcc66, 0, 6, 2);
+  light.position.copy(pos);
+  parent.add(light);
+  const sprite = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.18, 0.18),
+    new THREE.MeshBasicMaterial({ color: 0xffdd88, transparent: true, opacity: 0 })
+  );
+  sprite.position.copy(pos);
+  parent.add(sprite);
+  return { light, sprite };
+}
 
-const muzzleFlash = new THREE.PointLight(0xffcc66, 0, 6, 2);
-muzzleFlash.position.set(0, 0.02, -0.62);
-weapon.add(muzzleFlash);
+// rifle
+const weaponRifle = new THREE.Group();
+{
+  const gunBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.12, 0.14, 0.55),
+    new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.4, metalness: 0.6 })
+  );
+  const gunBarrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.025, 0.025, 0.3, 12),
+    new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.3, metalness: 0.8 })
+  );
+  gunBarrel.rotation.x = Math.PI / 2;
+  gunBarrel.position.set(0, 0.02, -0.45);
+  weaponRifle.add(gunBody, gunBarrel);
+}
+weaponRifle.position.set(0.28, -0.25, -0.55);
+camera.add(weaponRifle);
+const rifleMuzzle = buildMuzzle(weaponRifle, new THREE.Vector3(0, 0.02, -0.62));
 
-const flashSprite = new THREE.Mesh(
-  new THREE.PlaneGeometry(0.18, 0.18),
-  new THREE.MeshBasicMaterial({ color: 0xffdd88, transparent: true, opacity: 0 })
-);
-flashSprite.position.set(0, 0.02, -0.63);
-weapon.add(flashSprite);
+// pistol
+const weaponPistol = new THREE.Group();
+{
+  const gunBody = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.16, 0.32),
+    new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.35, metalness: 0.65 })
+  );
+  const grip = new THREE.Mesh(
+    new THREE.BoxGeometry(0.08, 0.18, 0.1),
+    new THREE.MeshStandardMaterial({ color: 0x16171a, roughness: 0.6 })
+  );
+  grip.position.set(0, -0.15, 0.08);
+  weaponPistol.add(gunBody, grip);
+}
+weaponPistol.position.set(0.26, -0.22, -0.42);
+weaponPistol.visible = false;
+camera.add(weaponPistol);
+const pistolMuzzle = buildMuzzle(weaponPistol, new THREE.Vector3(0, 0.03, -0.18));
+
+// knife
+const weaponKnife = new THREE.Group();
+{
+  const blade = new THREE.Mesh(
+    new THREE.BoxGeometry(0.035, 0.32, 0.05),
+    new THREE.MeshStandardMaterial({ color: 0xcfd6dc, roughness: 0.25, metalness: 0.9 })
+  );
+  blade.position.set(0, 0.18, 0);
+  const handle = new THREE.Mesh(
+    new THREE.BoxGeometry(0.045, 0.14, 0.06),
+    new THREE.MeshStandardMaterial({ color: 0x3a2c20, roughness: 0.7 })
+  );
+  weaponKnife.add(blade, handle);
+  weaponKnife.rotation.x = -0.5;
+}
+weaponKnife.position.set(0.24, -0.22, -0.4);
+weaponKnife.visible = false;
+camera.add(weaponKnife);
+
+const weaponModels = { rifle: weaponRifle, pistol: weaponPistol, knife: weaponKnife };
+const weaponMuzzles = { rifle: rifleMuzzle, pistol: pistolMuzzle, knife: null };
+const weaponRestZ = { rifle: weaponRifle.position.z, pistol: weaponPistol.position.z, knife: weaponKnife.position.z };
 
 // ----- input / pointer lock --------------------------------------------
 const keys = {};
@@ -238,38 +304,83 @@ function playHit() {
 }
 
 // ----- weapon state -------------------------------------------------------
-const weaponState = {
-  magSize: 12,
-  ammo: 12,
-  reserve: 48,
-  reloading: false,
-  fireCooldown: 0,
-  fireRate: 0.14,
+const WEAPONS = {
+  rifle: {
+    name: 'RIFLE', melee: false, auto: true,
+    magSize: 12, ammo: 12, reserve: 48,
+    fireRate: 0.14, reloadTime: 1200, dmgBody: 34, dmgHead: 100,
+    recoil: 0.045,
+  },
+  pistol: {
+    name: 'PISTOL', melee: false, auto: false,
+    magSize: 8, ammo: 8, reserve: 32,
+    fireRate: 0.28, reloadTime: 900, dmgBody: 22, dmgHead: 70,
+    recoil: 0.03,
+  },
+  knife: {
+    name: 'KNIFE', melee: true, auto: false,
+    range: 2.4, fireRate: 0.45, dmgBody: 60, dmgHead: 60,
+    recoil: 0,
+  },
 };
 
-function updateAmmoHud() {
-  hud.ammo.textContent = weaponState.ammo;
-  hud.reserve.textContent = weaponState.reserve;
+let currentWeaponKey = 'rifle';
+let reloading = false;
+let fireCooldown = 0;
+
+function currentWeapon() {
+  return WEAPONS[currentWeaponKey];
 }
+
+function updateAmmoHud() {
+  const w = currentWeapon();
+  hud.weaponName.textContent = w.name;
+  if (w.melee) {
+    hud.ammo.textContent = '∞';
+    hud.reserve.textContent = '-';
+  } else {
+    hud.ammo.textContent = w.ammo;
+    hud.reserve.textContent = w.reserve;
+  }
+}
+
+function setWeapon(key) {
+  if (!WEAPONS[key] || key === currentWeaponKey) return;
+  currentWeaponKey = key;
+  reloading = false;
+  fireCooldown = 0.15;
+  kickTimer = 0;
+  for (const k in weaponModels) weaponModels[k].visible = k === key;
+  updateAmmoHud();
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Digit1') setWeapon('rifle');
+  if (e.code === 'Digit2') setWeapon('pistol');
+  if (e.code === 'Digit3') setWeapon('knife');
+});
+
 updateAmmoHud();
 
 function reload() {
-  if (weaponState.reloading || weaponState.ammo === weaponState.magSize || weaponState.reserve <= 0) return;
-  weaponState.reloading = true;
+  const w = currentWeapon();
+  if (w.melee || reloading || w.ammo === w.magSize || w.reserve <= 0) return;
+  reloading = true;
   setTimeout(() => {
-    const need = weaponState.magSize - weaponState.ammo;
-    const take = Math.min(need, weaponState.reserve);
-    weaponState.ammo += take;
-    weaponState.reserve -= take;
-    weaponState.reloading = false;
+    const need = w.magSize - w.ammo;
+    const take = Math.min(need, w.reserve);
+    w.ammo += take;
+    w.reserve -= take;
+    reloading = false;
     updateAmmoHud();
-  }, 1200);
+  }, w.reloadTime);
 }
 
 // recoil / view-kick state
 let recoilPitch = 0;
 let recoilYaw = 0;
 let kickTimer = 0;
+let kickBaseZ = 0;
 
 const raycaster = new THREE.Raycaster();
 const shootables = () => targets.flatMap((t) => [t.userData.body, t.userData.head]);
@@ -286,36 +397,48 @@ document.addEventListener('keydown', (e) => { if (e.code === 'KeyR') reload(); }
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
 function tryShoot() {
-  if (weaponState.fireCooldown > 0 || weaponState.reloading) return;
-  if (weaponState.ammo <= 0) { playDry(); return; }
+  if (gameOver) return;
+  const w = currentWeapon();
+  if (fireCooldown > 0 || reloading) return;
 
-  weaponState.ammo--;
-  weaponState.fireCooldown = weaponState.fireRate;
-  updateAmmoHud();
+  if (!w.melee) {
+    if (w.ammo <= 0) { playDry(); return; }
+    w.ammo--;
+    updateAmmoHud();
+  }
+  fireCooldown = w.fireRate;
   playShot();
 
   // visual recoil + camera kick
-  recoilPitch += 0.045;
-  recoilYaw += (Math.random() - 0.5) * 0.02;
-  weapon.position.z = -0.45;
+  recoilPitch += w.recoil;
+  recoilYaw += (Math.random() - 0.5) * w.recoil * 0.45;
+  const activeWeapon = weaponModels[currentWeaponKey];
+  const baseZ = weaponRestZ[currentWeaponKey];
+  activeWeapon.position.z = baseZ + 0.1;
   kickTimer = 0.08;
+  kickBaseZ = baseZ;
 
   // muzzle flash
-  muzzleFlash.intensity = 4;
-  flashSprite.material.opacity = 1;
+  const muzzle = weaponMuzzles[currentWeaponKey];
+  if (muzzle) {
+    muzzle.light.intensity = 4;
+    muzzle.sprite.material.opacity = 1;
+  }
 
   hud.crosshair.classList.add('shoot');
   setTimeout(() => hud.crosshair.classList.remove('shoot'), 60);
 
   // raycast from camera center
+  const range = w.melee ? w.range : 100;
   raycaster.setFromCamera(new THREE.Vector2(0, 0), camera);
+  raycaster.far = range;
   const hits = raycaster.intersectObjects(shootables(), false);
   if (hits.length > 0) {
     const hit = hits[0];
     const target = targets.find((t) => t.userData.body === hit.object || t.userData.head === hit.object);
     if (target && target.userData.alive) {
       const headshot = hit.object === target.userData.head;
-      const dmg = headshot ? 100 : 34;
+      const dmg = headshot ? w.dmgHead : w.dmgBody;
       target.userData.hp -= dmg;
       playHit();
       hud.hitmarker.classList.add('show');
@@ -325,6 +448,7 @@ function tryShoot() {
       }
     }
   }
+  raycaster.far = Infinity;
 }
 
 function killTarget(target, headshot) {
@@ -364,6 +488,51 @@ function collidesAt(x, z) {
 }
 
 let headBobTime = 0;
+
+// ----- player health -------------------------------------------------------
+const PLAYER_MAX_HP = 150;
+let playerHp = PLAYER_MAX_HP;
+let gameOver = false;
+
+function updateHealthHud() {
+  hud.hp.textContent = Math.max(0, Math.round(playerHp));
+  hud.healthbarFill.style.width = `${Math.max(0, (playerHp / PLAYER_MAX_HP) * 100)}%`;
+}
+updateHealthHud();
+
+function damagePlayer(amount) {
+  if (gameOver) return;
+  playerHp = Math.max(0, playerHp - amount);
+  updateHealthHud();
+  hud.flash.classList.add('show');
+  setTimeout(() => hud.flash.classList.remove('show'), 120);
+  if (playerHp <= 0) killPlayer();
+}
+
+function killPlayer() {
+  gameOver = true;
+  mouseDown = false;
+  document.exitPointerLock();
+  blockerTitle.textContent = 'YOU DIED';
+  blockerSub.textContent = '클릭해서 다시 시작';
+  blocker.classList.remove('hidden');
+}
+
+function respawnPlayer() {
+  playerHp = PLAYER_MAX_HP;
+  gameOver = false;
+  yawObject.position.set(0, 1.7, 8);
+  verticalVelocity = 0;
+  updateHealthHud();
+  blockerTitle.textContent = '1FPS';
+  blockerSub.textContent = '클릭해서 게임 시작 (마우스 잠금)';
+  for (const target of targets.slice()) killTarget(target, false);
+  for (let i = 0; i < 4; i++) spawnRandomTarget();
+}
+
+blocker.addEventListener('click', () => {
+  if (gameOver) respawnPlayer();
+});
 
 function updateMovement(dt) {
   const forward = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
@@ -411,15 +580,20 @@ function updateRecoilRecovery(dt) {
   pitchObject.rotation.x = pitch + recoilPitch;
   yawObject.rotation.y = yaw + recoilYaw;
 
+  const activeWeapon = weaponModels[currentWeaponKey];
   if (kickTimer > 0) {
     kickTimer -= dt;
-    weapon.position.z = -0.45 + 0.06 * (kickTimer / 0.08);
+    activeWeapon.position.z = kickBaseZ + 0.1 * (kickTimer / 0.08);
   } else {
-    weapon.position.z = -0.55;
+    activeWeapon.position.z = kickBaseZ;
   }
 
-  muzzleFlash.intensity *= Math.max(0, 1 - dt * 18);
-  flashSprite.material.opacity *= Math.max(0, 1 - dt * 18);
+  for (const key in weaponMuzzles) {
+    const muzzle = weaponMuzzles[key];
+    if (!muzzle) continue;
+    muzzle.light.intensity *= Math.max(0, 1 - dt * 18);
+    muzzle.sprite.material.opacity *= Math.max(0, 1 - dt * 18);
+  }
 }
 
 function updateTargets(dt, t) {
@@ -427,6 +601,63 @@ function updateTargets(dt, t) {
     target.userData.t += dt;
     target.position.x += Math.sin(target.userData.t * 0.6) * dt * 0.4;
     target.position.y = 0;
+  }
+}
+
+function playEnemyShot() {
+  const c = ctx();
+  const osc = c.createOscillator();
+  const gain = c.createGain();
+  osc.type = 'sawtooth';
+  osc.frequency.setValueAtTime(140, c.currentTime);
+  osc.frequency.exponentialRampToValueAtTime(50, c.currentTime + 0.1);
+  gain.gain.setValueAtTime(0.16, c.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.001, c.currentTime + 0.14);
+  osc.connect(gain).connect(c.destination);
+  osc.start();
+  osc.stop(c.currentTime + 0.14);
+}
+
+const aiRaycaster = new THREE.Raycaster();
+
+function hasLineOfSight(from, to) {
+  const dir = new THREE.Vector3().subVectors(to, from);
+  const dist = dir.length();
+  dir.normalize();
+  aiRaycaster.set(from, dir);
+  aiRaycaster.far = dist;
+  const hits = aiRaycaster.intersectObjects(colliders, false);
+  return hits.length === 0;
+}
+
+function updateTargetAI(dt) {
+  if (gameOver) return;
+  const playerPos = new THREE.Vector3();
+  camera.getWorldPosition(playerPos);
+
+  for (const target of targets) {
+    if (!target.userData.alive) continue;
+    const dist = target.position.distanceTo(yawObject.position);
+    target.userData.attackCooldown -= dt;
+
+    if (dist < target.userData.attackRange) {
+      const eyePos = target.position.clone();
+      eyePos.y = 1.25;
+      const lookTarget = new THREE.Vector3(yawObject.position.x, eyePos.y, yawObject.position.z);
+      target.lookAt(lookTarget);
+
+      if (target.userData.attackCooldown <= 0 && hasLineOfSight(eyePos, playerPos)) {
+        target.userData.attackCooldown = 1.2 + Math.random() * 1.4;
+        target.userData.muzzleLight.intensity = 3;
+        setTimeout(() => { if (target.userData.muzzleLight) target.userData.muzzleLight.intensity = 0; }, 80);
+        playEnemyShot();
+
+        const accuracy = Math.max(0.25, 1 - dist / target.userData.attackRange);
+        if (Math.random() < accuracy * 0.7) {
+          damagePlayer(6 + Math.random() * 6);
+        }
+      }
+    }
   }
 }
 
@@ -443,10 +674,11 @@ function animate() {
   requestAnimationFrame(animate);
   const dt = Math.min(0.05, clock.getDelta());
 
-  if (locked) {
+  if (locked && !gameOver) {
     updateMovement(dt);
-    if (mouseDown) tryShoot();
-    if (weaponState.fireCooldown > 0) weaponState.fireCooldown -= dt;
+    if (mouseDown && currentWeapon().auto) tryShoot();
+    if (fireCooldown > 0) fireCooldown -= dt;
+    updateTargetAI(dt);
   }
   updateRecoilRecovery(dt);
   updateTargets(dt, clock.elapsedTime);
