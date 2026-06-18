@@ -927,6 +927,7 @@ function onDuelKill() {
     setTimeout(() => {
       playerHp = PLAYER_MAX_HP;
       updateHealthHud();
+      refillAmmo();
       spawnDuelOpponent();
     }, 1200);
   }
@@ -1017,6 +1018,7 @@ function killPlayer() {
         updateHealthHud();
         yawObject.position.set(0, 1.7, 8);
         for (const target of targets.slice()) killTarget(target, false, true);
+        refillAmmo();
         spawnDuelOpponent();
       }, 1200);
     }
@@ -1039,14 +1041,18 @@ function loseDuel() {
   blocker.classList.remove('hidden');
 }
 
-function startMatch() {
-  for (const target of targets.slice()) killTarget(target, false, true);
+function refillAmmo() {
   for (const key in WEAPONS) {
     const w = WEAPONS[key];
     if (!w.melee) { w.ammo = WEAPON_DEFAULTS[key].magSize; w.reserve = WEAPON_DEFAULTS[key].reserve; }
     w.reloading = false;
   }
   updateAmmoHud();
+}
+
+function startMatch() {
+  for (const target of targets.slice()) killTarget(target, false, true);
+  refillAmmo();
   if (gameMode === 'duel') {
     playerScore = 0;
     aiScore = 0;
