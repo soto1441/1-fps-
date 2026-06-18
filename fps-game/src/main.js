@@ -343,6 +343,7 @@ function spawnTarget(x, z) {
     baseY: 0, t: Math.random() * Math.PI * 2,
     attackCooldown: 1 + Math.random() * 1.5,
     attackRange: 22,
+    strafeTimer: 0, strafeSign: 1,
   };
   scene.add(group);
   targets.push(group);
@@ -597,6 +598,7 @@ const WEAPONS = {
     magSize: 12, ammo: 12, reserve: 48,
     fireRate: 0.14, reloadTime: 1200, dmgBody: 34, dmgHead: 100,
     recoil: 0.045, reloading: false,
+    bloomGrowDeg: 0.45, maxSpreadDeg: 3.2,
   },
   pistol: {
     name: 'PISTOL', melee: false, auto: false,
@@ -650,6 +652,7 @@ function setWeapon(key) {
   currentWeaponKey = key;
   fireCooldown = 0.15;
   kickTimer = 0;
+  weaponBloom = 0;
   for (const k in weaponModels) weaponModels[k].visible = k === key;
   updateAmmoHud();
   if (key !== 'sniper') setZoom(false);
@@ -756,6 +759,7 @@ let recoilPitch = 0;
 let recoilYaw = 0;
 let kickTimer = 0;
 let kickBaseZ = 0;
+let weaponBloom = 0; // grows with sustained auto-fire, decays when not firing
 
 const raycaster = new THREE.Raycaster();
 const shootables = () => targets.flatMap((t) => [t.userData.body, t.userData.head]);
@@ -782,6 +786,7 @@ function tryShoot() {
     updateAmmoHud();
   }
   fireCooldown = w.fireRate;
+  if (w.auto) weaponBloom = Math.min(w.maxSpreadDeg || 0, weaponBloom + (w.bloomGrowDeg || 0));
   playShot();
 
   // visual recoil + camera kick
@@ -813,6 +818,10 @@ function tryShoot() {
     let ndcX = 0, ndcY = 0;
     if (w.pellets) {
       const spread = (w.spreadDeg * Math.PI / 180);
+      ndcX = (Math.random() - 0.5) * spread;
+      ndcY = (Math.random() - 0.5) * spread;
+    } else if (w.auto && weaponBloom > 0) {
+      const spread = (weaponBloom * Math.PI / 180);
       ndcX = (Math.random() - 0.5) * spread;
       ndcY = (Math.random() - 0.5) * spread;
     }
@@ -1122,6 +1131,7 @@ function updateMovement(dt) {
 }
 
 function updateRecoilRecovery(dt) {
+  weaponBloom = Math.max(0, weaponBloom - dt * 3);
   recoilPitch *= Math.max(0, 1 - dt * 8);
   recoilYaw *= Math.max(0, 1 - dt * 8);
   pitchObject.rotation.x = pitch + recoilPitch;
@@ -1152,7 +1162,11 @@ function updateHazards(t) {
 function updateTargets(dt, t) {
   for (const target of targets) {
     target.userData.t += dt;
-    target.position.x += Math.sin(target.userData.t * 0.6) * dt * 0.4;
+    // duelist movement is driven entirely by updateTargetAI; range dummies
+    // just sway gently in place for a readable, stationary practice target
+    if (!target.userData.isDuelist) {
+      target.position.x += Math.sin(target.userData.t * 0.6) * dt * 0.4;
+    }
     target.position.y = 0;
     target.userData.healthBar.position.x = target.position.x;
     target.userData.healthBar.position.z = target.position.z;
@@ -1188,34 +1202,64 @@ function hasLineOfSight(from, to) {
 function updateTargetAI(dt) {
   if (gameOver) return;
   // 사격장(range) bots are pure aim-practice dummies and never shoot back —
-  // only the 1대1 AI 대결(duel) opponent fights
+  // only the 1대1 AI 대결(duel) opponent fights, and now actually maneuvers:
+  // closes distance when out of range/sight, strafes side-to-side while
+  // trading shots, and breaks off to create space when low on hp
   if (gameMode !== 'duel') return;
   const playerPos = new THREE.Vector3();
   camera.getWorldPosition(playerPos);
 
   for (const target of targets) {
     if (!target.userData.alive) continue;
-    const dist = target.position.distanceTo(yawObject.position);
-    target.userData.attackCooldown -= dt;
+    const ud = target.userData;
+    const toPlayer = new THREE.Vector3().subVectors(yawObject.position, target.position);
+    toPlayer.y = 0;
+    const dist = toPlayer.length();
+    ud.attackCooldown -= dt;
+    ud.strafeTimer -= dt;
 
-    if (dist < target.userData.attackRange) {
-      const eyePos = target.position.clone();
-      eyePos.y = 1.25;
+    const eyePos = target.position.clone();
+    eyePos.y = 1.25;
+    const hasLOS = hasLineOfSight(eyePos, playerPos);
+
+    const lowHp = ud.isDuelist && ud.hp / ud.maxHp < 0.3;
+    const moveDir = new THREE.Vector3();
+    if (lowHp) {
+      moveDir.copy(toPlayer).multiplyScalar(-1); // fall back to create space
+    } else if (dist > ud.attackRange * 0.85 || !hasLOS) {
+      moveDir.copy(toPlayer); // close the distance / hunt for an angle
+    } else if (ud.isDuelist) {
+      if (ud.strafeTimer <= 0) {
+        ud.strafeTimer = 0.7 + Math.random() * 1.1;
+        ud.strafeSign = Math.random() < 0.5 ? 1 : -1;
+      }
+      moveDir.set(-toPlayer.z, 0, toPlayer.x).multiplyScalar(ud.strafeSign); // strafe while shooting
+    }
+    if (moveDir.lengthSq() > 0.0001) {
+      moveDir.normalize();
+      const speed = ud.isDuelist ? 3.6 : 1.8;
+      const nx = target.position.x + moveDir.x * speed * dt;
+      const nz = target.position.z + moveDir.z * speed * dt;
+      if (!collidesAt(nx, target.position.z)) target.position.x = nx;
+      if (!collidesAt(target.position.x, nz)) target.position.z = nz;
+    }
+
+    if (dist < ud.attackRange) {
       const lookTarget = new THREE.Vector3(yawObject.position.x, eyePos.y, yawObject.position.z);
       target.lookAt(lookTarget);
 
-      if (target.userData.attackCooldown <= 0 && hasLineOfSight(eyePos, playerPos)) {
-        target.userData.attackCooldown = target.userData.isDuelist
+      if (ud.attackCooldown <= 0 && hasLOS) {
+        ud.attackCooldown = ud.isDuelist
           ? 0.5 + Math.random() * 0.6
           : 1.2 + Math.random() * 1.4;
-        target.userData.muzzleLight.intensity = 3;
-        setTimeout(() => { if (target.userData.muzzleLight) target.userData.muzzleLight.intensity = 0; }, 80);
+        ud.muzzleLight.intensity = 3;
+        setTimeout(() => { if (ud.muzzleLight) ud.muzzleLight.intensity = 0; }, 80);
         playEnemyShot();
 
-        const accuracy = Math.max(0.25, 1 - dist / target.userData.attackRange);
-        const hitChance = target.userData.isDuelist ? accuracy : accuracy * 0.7;
+        const accuracy = Math.max(0.25, 1 - dist / ud.attackRange);
+        const hitChance = ud.isDuelist ? accuracy : accuracy * 0.7;
         if (Math.random() < hitChance) {
-          damagePlayer(target.userData.isDuelist ? 10 + Math.random() * 8 : 6 + Math.random() * 6);
+          damagePlayer(ud.isDuelist ? 10 + Math.random() * 8 : 6 + Math.random() * 6);
         }
       }
     }
