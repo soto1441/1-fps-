@@ -534,13 +534,13 @@ window.addEventListener('blur', clearInputState);
 blocker.addEventListener('click', () => renderer.domElement.requestPointerLock());
 document.addEventListener('pointerlockchange', () => {
   locked = document.pointerLockElement === renderer.domElement;
-  blocker.classList.toggle('hidden', locked);
-  if (!locked) clearInputState();
+  if (!buyMenuOpen) blocker.classList.toggle('hidden', locked);
+  if (!locked) { clearInputState(); setZoom(false); }
 });
 
 document.addEventListener('mousemove', (e) => {
   if (!locked) return;
-  const sensitivity = 0.0022;
+  const sensitivity = zoomed ? 0.0022 * 0.3 : 0.0022;
   yaw -= e.movementX * sensitivity;
   pitch -= e.movementY * sensitivity;
   pitch = Math.max(-Math.PI / 2 + 0.01, Math.min(Math.PI / 2 - 0.01, pitch));
@@ -652,6 +652,7 @@ function setWeapon(key) {
   kickTimer = 0;
   for (const k in weaponModels) weaponModels[k].visible = k === key;
   updateAmmoHud();
+  if (key !== 'sniper') setZoom(false);
 }
 
 // weapon categories à la Valorant/Rivals: slot 1 cycles primaries, slot 2
@@ -680,6 +681,60 @@ document.addEventListener('keydown', (e) => {
 });
 
 updateAmmoHud();
+
+// ----- buy menu (B): swap any equipped slot's weapon, Valorant/Rivals style -
+const buyMenu = document.getElementById('buyMenu');
+const buyButtons = document.querySelectorAll('.buyBtn');
+let buyMenuOpen = false;
+
+function highlightBuyMenu() {
+  for (const btn of buyButtons) btn.classList.toggle('active', btn.dataset.weapon === currentWeaponKey);
+}
+
+function toggleBuyMenu(force) {
+  if (gameOver) return;
+  buyMenuOpen = force !== undefined ? force : !buyMenuOpen;
+  buyMenu.classList.toggle('hidden', !buyMenuOpen);
+  if (buyMenuOpen) {
+    setZoom(false);
+    document.exitPointerLock();
+    highlightBuyMenu();
+  } else {
+    renderer.domElement.requestPointerLock();
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyB') toggleBuyMenu();
+});
+
+for (const btn of buyButtons) {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const key = btn.dataset.weapon;
+    setWeapon(key);
+    const idx = WEAPON_SLOTS.primary.indexOf(key);
+    if (idx !== -1) primaryIndex = idx;
+    toggleBuyMenu(false);
+  });
+}
+
+// ----- sniper scope zoom (right click) -------------------------------------
+let zoomed = false;
+const DEFAULT_FOV = camera.fov;
+const SNIPER_ZOOM_FOV = 18;
+function setZoom(on) {
+  if (on === zoomed) return;
+  zoomed = on;
+  camera.fov = zoomed ? SNIPER_ZOOM_FOV : DEFAULT_FOV;
+  camera.updateProjectionMatrix();
+}
+document.addEventListener('mousedown', (e) => {
+  if (e.button === 2 && locked && currentWeaponKey === 'sniper') setZoom(true);
+});
+document.addEventListener('mouseup', (e) => {
+  if (e.button === 2) setZoom(false);
+});
 
 function reload() {
   if (!locked || INFINITE_AMMO) return;

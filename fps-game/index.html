@@ -92,13 +92,34 @@
     }
     .mapBtn:hover, .modeBtn:hover { background: rgba(255,255,255,.16); }
     .mapBtn.active, .modeBtn.active { background: #9be86b; color: #14210a; border-color: #9be86b; font-weight: bold; }
+
+    #buyMenu {
+      position: fixed; inset: 0; background: rgba(0,0,0,.88); z-index: 20;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #eee;
+    }
+    #buyMenu.hidden { display: none; }
+    .buyMenuInner { display: flex; gap: 14px; }
+    .buyCol {
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.2);
+      border-radius: 6px; padding: 10px; min-width: 120px; text-align: center;
+    }
+    .buyCol h3 { font-size: 13px; color: #9be86b; margin: 0 0 10px; letter-spacing: 1px; }
+    .buyBtn {
+      display: block; width: 100%; padding: 10px 8px; margin-bottom: 8px;
+      font-family: inherit; font-size: 13px; color: #cdd; background: rgba(255,255,255,.08);
+      border: 1px solid rgba(255,255,255,.25); border-radius: 4px; cursor: pointer;
+    }
+    .buyBtn:hover { background: rgba(255,255,255,.18); }
+    .buyBtn.active { background: #9be86b; color: #14210a; font-weight: bold; border-color: #9be86b; }
+    .buyHint { margin-top: 16px; font-size: 12px; color: #889; }
   </style>
 </head>
 <body>
   <div id="blocker">
     <h1 id="blockerTitle">1FPS</h1>
     <p id="blockerSub">클릭해서 게임 시작 (마우스 잠금)</p>
-    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1 주무기(순환) · 2 보조무기 · 3 근접무기</p>
+    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1 주무기(순환) · 2 보조무기 · 3 근접무기 · B 무기 변경 · 스나이퍼 우클릭 줌</p>
     <div id="modeSelect">
       <button class="modeBtn" data-mode="range">사격장</button>
       <button class="modeBtn" data-mode="duel">1대1 AI 대결</button>
@@ -129,6 +150,32 @@
     <div id="killfeedList"></div>
   </div>
   <div id="flash"></div>
+
+  <div id="buyMenu" class="hidden">
+    <div class="buyMenuInner">
+      <div class="buyCol">
+        <h3>보조무기</h3>
+        <button class="buyBtn" data-weapon="pistol">권총</button>
+      </div>
+      <div class="buyCol">
+        <h3>산탄총</h3>
+        <button class="buyBtn" data-weapon="shotgun">샷건</button>
+      </div>
+      <div class="buyCol">
+        <h3>소총</h3>
+        <button class="buyBtn" data-weapon="rifle">라이플</button>
+      </div>
+      <div class="buyCol">
+        <h3>저격소총</h3>
+        <button class="buyBtn" data-weapon="sniper">스나이퍼</button>
+      </div>
+      <div class="buyCol">
+        <h3>근접무기</h3>
+        <button class="buyBtn" data-weapon="knife">나이프</button>
+      </div>
+    </div>
+    <p class="buyHint">B 키로 닫기</p>
+  </div>
 
   <script type="importmap">
     {
