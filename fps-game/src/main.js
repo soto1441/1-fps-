@@ -1132,6 +1132,9 @@ function hasLineOfSight(from, to) {
 
 function updateTargetAI(dt) {
   if (gameOver) return;
+  // 사격장(range) bots are pure aim-practice dummies and never shoot back —
+  // only the 1대1 AI 대결(duel) opponent fights
+  if (gameMode !== 'duel') return;
   const playerPos = new THREE.Vector3();
   camera.getWorldPosition(playerPos);
 
