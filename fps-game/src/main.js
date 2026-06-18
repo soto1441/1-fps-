@@ -345,6 +345,7 @@ function spawnTarget(x, z) {
     attackCooldown: 1 + Math.random() * 1.5,
     attackRange: 22,
     strafeTimer: 0, strafeSign: 1,
+    ammo: 20, maxAmmo: 20, reloading: false, reloadTimer: 0,
   };
   scene.add(group);
   targets.push(group);
@@ -627,7 +628,10 @@ const WEAPONS = {
   },
 };
 
-const INFINITE_AMMO = true; // shooting-range mode: never run dry
+let gameMode = 'range';
+// 사격장(range)은 에임 연습이라 무한탄, 1대1 대결(duel)은 진짜 탄약/재장전이 의미 있게 작동
+function infiniteAmmo() { return gameMode === 'range'; }
+const WEAPON_DEFAULTS = JSON.parse(JSON.stringify(WEAPONS));
 
 let currentWeaponKey = 'rifle';
 let fireCooldown = 0;
@@ -639,7 +643,7 @@ function currentWeapon() {
 function updateAmmoHud() {
   const w = currentWeapon();
   hud.weaponName.textContent = w.name;
-  if (w.melee || INFINITE_AMMO) {
+  if (w.melee || infiniteAmmo()) {
     hud.ammo.textContent = '∞';
     hud.reserve.textContent = '-';
   } else {
@@ -741,7 +745,7 @@ document.addEventListener('mouseup', (e) => {
 });
 
 function reload() {
-  if (!locked || INFINITE_AMMO) return;
+  if (!locked || infiniteAmmo()) return;
   const w = currentWeapon();
   if (w.melee || w.reloading || w.ammo === w.magSize || w.reserve <= 0) return;
   w.reloading = true;
@@ -790,7 +794,7 @@ function tryShoot() {
   const w = currentWeapon();
   if (fireCooldown > 0 || w.reloading || inspectTimer > 0) return;
 
-  if (!w.melee && !INFINITE_AMMO) {
+  if (!w.melee && !infiniteAmmo()) {
     if (w.ammo <= 0) { playDry(); return; }
     w.ammo--;
     updateAmmoHud();
@@ -881,7 +885,6 @@ function killTarget(target, headshot, silent) {
 // ----- game modes: 사격장(range) clears waves of weak dummies for points,
 // 1대1 AI 대결(duel) is a single tougher bot fought best-of-5, both modeled
 // after RIVALS/Valorant-style match scoring (first to N round wins) -------
-let gameMode = 'range';
 const ROUNDS_TO_WIN = 5;
 let roundScore = 0;
 let roundTransition = false;
@@ -1038,6 +1041,12 @@ function loseDuel() {
 
 function startMatch() {
   for (const target of targets.slice()) killTarget(target, false, true);
+  for (const key in WEAPONS) {
+    const w = WEAPONS[key];
+    if (!w.melee) { w.ammo = WEAPON_DEFAULTS[key].magSize; w.reserve = WEAPON_DEFAULTS[key].reserve; }
+    w.reloading = false;
+  }
+  updateAmmoHud();
   if (gameMode === 'duel') {
     playerScore = 0;
     aiScore = 0;
@@ -1247,6 +1256,10 @@ function updateTargetAI(dt) {
     const dist = toPlayer.length();
     ud.attackCooldown -= dt;
     ud.strafeTimer -= dt;
+    if (ud.reloading) {
+      ud.reloadTimer -= dt;
+      if (ud.reloadTimer <= 0) { ud.reloading = false; ud.ammo = ud.maxAmmo; }
+    }
 
     const eyePos = target.position.clone();
     eyePos.y = 1.25;
@@ -1278,18 +1291,24 @@ function updateTargetAI(dt) {
       const lookTarget = new THREE.Vector3(yawObject.position.x, eyePos.y, yawObject.position.z);
       target.lookAt(lookTarget);
 
-      if (ud.attackCooldown <= 0 && hasLOS) {
-        ud.attackCooldown = ud.isDuelist
-          ? 0.5 + Math.random() * 0.6
-          : 1.2 + Math.random() * 1.4;
-        ud.muzzleLight.intensity = 3;
-        setTimeout(() => { if (ud.muzzleLight) ud.muzzleLight.intensity = 0; }, 80);
-        playEnemyShot();
+      if (ud.attackCooldown <= 0 && hasLOS && !ud.reloading) {
+        if (ud.ammo <= 0) {
+          ud.reloading = true;
+          ud.reloadTimer = 1.6;
+        } else {
+          ud.attackCooldown = ud.isDuelist
+            ? 0.5 + Math.random() * 0.6
+            : 1.2 + Math.random() * 1.4;
+          ud.ammo--;
+          ud.muzzleLight.intensity = 3;
+          setTimeout(() => { if (ud.muzzleLight) ud.muzzleLight.intensity = 0; }, 80);
+          playEnemyShot();
 
-        const accuracy = Math.max(0.25, 1 - dist / ud.attackRange);
-        const hitChance = ud.isDuelist ? accuracy : accuracy * 0.7;
-        if (Math.random() < hitChance) {
-          damagePlayer(ud.isDuelist ? 10 + Math.random() * 8 : 6 + Math.random() * 6);
+          const accuracy = Math.max(0.25, 1 - dist / ud.attackRange);
+          const hitChance = ud.isDuelist ? accuracy : accuracy * 0.7;
+          if (Math.random() < hitChance) {
+            damagePlayer(ud.isDuelist ? 10 + Math.random() * 8 : 6 + Math.random() * 6);
+          }
         }
       }
     }
