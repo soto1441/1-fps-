@@ -365,6 +365,28 @@ function spawnRandomTarget() {
   }
 }
 
+// the duel opponent is a single tougher, more aggressive bot rather than a
+// wave of weak dummies — boosted hp/accuracy/fire-rate flagged via isDuelist
+function spawnDuelOpponent() {
+  const half = ARENA / 2 - 3;
+  let x = 0, z = -10;
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const tx = (Math.random() * 2 - 1) * half;
+    const tz = (Math.random() * 2 - 1) * half;
+    if (yawObject.position.distanceTo(new THREE.Vector3(tx, 0, tz)) < 14) continue;
+    if (collidesAt(tx, tz)) continue;
+    if (hazardAt(tx, tz)) continue;
+    x = tx; z = tz;
+    break;
+  }
+  spawnTarget(x, z);
+  const ai = targets[targets.length - 1];
+  ai.userData.hp = ai.userData.maxHp = 150;
+  ai.userData.attackRange = 35;
+  ai.userData.isDuelist = true;
+  updateTargetHealthBar(ai);
+}
+
 
 // ----- weapon viewmodels ---------------------------------------------------
 function buildMuzzle(parent, pos) {
@@ -632,12 +654,29 @@ function setWeapon(key) {
   updateAmmoHud();
 }
 
+// weapon categories à la Valorant/Rivals: slot 1 cycles primaries, slot 2
+// is the secondary, slot 3 is melee
+const WEAPON_SLOTS = {
+  primary: ['rifle', 'shotgun', 'sniper'],
+  secondary: ['pistol'],
+  melee: ['knife'],
+};
+let primaryIndex = 0;
+
+function pickSlot(slotKey) {
+  const list = WEAPON_SLOTS[slotKey];
+  if (slotKey === 'primary') {
+    if (list.includes(currentWeaponKey)) primaryIndex = (primaryIndex + 1) % list.length;
+    setWeapon(list[primaryIndex]);
+  } else {
+    setWeapon(list[0]);
+  }
+}
+
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'Digit1') setWeapon('rifle');
-  if (e.code === 'Digit2') setWeapon('pistol');
-  if (e.code === 'Digit3') setWeapon('knife');
-  if (e.code === 'Digit4') setWeapon('shotgun');
-  if (e.code === 'Digit5') setWeapon('sniper');
+  if (e.code === 'Digit1') pickSlot('primary');
+  if (e.code === 'Digit2') pickSlot('secondary');
+  if (e.code === 'Digit3') pickSlot('melee');
 });
 
 updateAmmoHud();
@@ -760,18 +799,27 @@ function killTarget(target, headshot, silent) {
   targets.splice(targets.indexOf(target), 1);
   if (!silent) {
     addKillFeed(headshot ? '헤드샷 ✕' : '제거 ✕');
-    checkWaveClear();
+    if (gameMode === 'duel') onDuelKill();
+    else checkWaveClear();
   }
 }
 
-// ----- round system (clear a wave of targets to earn 1 point; first to
-// ROUNDS_TO_WIN points wins, mirroring RIVALS' best-of-5 match format) ------
+// ----- game modes: 사격장(range) clears waves of weak dummies for points,
+// 1대1 AI 대결(duel) is a single tougher bot fought best-of-5, both modeled
+// after RIVALS/Valorant-style match scoring (first to N round wins) -------
+let gameMode = 'range';
 const ROUNDS_TO_WIN = 5;
 let roundScore = 0;
 let roundTransition = false;
 
+const DUEL_ROUNDS_TO_WIN = 5;
+let playerScore = 0;
+let aiScore = 0;
+
 function updateRoundHud() {
-  hud.round.textContent = `ROUND ${roundScore}/${ROUNDS_TO_WIN}`;
+  hud.round.textContent = gameMode === 'duel'
+    ? `YOU ${playerScore} - ${aiScore} AI`
+    : `ROUND ${roundScore}/${ROUNDS_TO_WIN}`;
 }
 
 function checkWaveClear() {
@@ -790,12 +838,30 @@ function checkWaveClear() {
   }
 }
 
+function onDuelKill() {
+  if (gameOver) return;
+  playerScore++;
+  updateRoundHud();
+  addKillFeed(`AI 제거! ${playerScore}-${aiScore}`);
+  if (playerScore >= DUEL_ROUNDS_TO_WIN) {
+    setTimeout(winGame, 600);
+  } else {
+    setTimeout(() => {
+      playerHp = PLAYER_MAX_HP;
+      updateHealthHud();
+      spawnDuelOpponent();
+    }, 1200);
+  }
+}
+
 function winGame() {
   gameOver = true;
   mouseDown = false;
   document.exitPointerLock();
   blockerTitle.textContent = 'VICTORY';
-  blockerSub.textContent = `${ROUNDS_TO_WIN}라운드 클리어! 클릭해서 다시 시작`;
+  blockerSub.textContent = gameMode === 'duel'
+    ? `AI와의 1대1에서 ${DUEL_ROUNDS_TO_WIN}승 달성! 클릭해서 다시 시작`
+    : `${ROUNDS_TO_WIN}라운드 클리어! 클릭해서 다시 시작`;
   blocker.classList.remove('hidden');
 }
 
@@ -852,6 +918,23 @@ function damagePlayer(amount) {
 }
 
 function killPlayer() {
+  if (gameMode === 'duel') {
+    aiScore++;
+    updateRoundHud();
+    addKillFeed(`사망! ${playerScore}-${aiScore}`);
+    if (aiScore >= DUEL_ROUNDS_TO_WIN) {
+      loseDuel();
+    } else {
+      setTimeout(() => {
+        playerHp = PLAYER_MAX_HP;
+        updateHealthHud();
+        yawObject.position.set(0, 1.7, 8);
+        for (const target of targets.slice()) killTarget(target, false, true);
+        spawnDuelOpponent();
+      }, 1200);
+    }
+    return;
+  }
   gameOver = true;
   mouseDown = false;
   document.exitPointerLock();
@@ -860,19 +943,39 @@ function killPlayer() {
   blocker.classList.remove('hidden');
 }
 
+function loseDuel() {
+  gameOver = true;
+  mouseDown = false;
+  document.exitPointerLock();
+  blockerTitle.textContent = 'DEFEAT';
+  blockerSub.textContent = `AI ${DUEL_ROUNDS_TO_WIN}승! 클릭해서 다시 시작`;
+  blocker.classList.remove('hidden');
+}
+
+function startMatch() {
+  for (const target of targets.slice()) killTarget(target, false, true);
+  if (gameMode === 'duel') {
+    playerScore = 0;
+    aiScore = 0;
+    updateRoundHud();
+    spawnDuelOpponent();
+  } else {
+    roundScore = 0;
+    roundTransition = false;
+    updateRoundHud();
+    for (let i = 0; i < 4; i++) spawnRandomTarget();
+  }
+}
+
 function respawnPlayer() {
   playerHp = PLAYER_MAX_HP;
   gameOver = false;
-  roundScore = 0;
-  roundTransition = false;
-  updateRoundHud();
   yawObject.position.set(0, 1.7, 8);
   verticalVelocity = 0;
   updateHealthHud();
   blockerTitle.textContent = '1FPS';
   blockerSub.textContent = '클릭해서 게임 시작 (마우스 잠금)';
-  for (const target of targets.slice()) killTarget(target, false, true);
-  for (let i = 0; i < 4; i++) spawnRandomTarget();
+  startMatch();
 }
 
 blocker.addEventListener('click', () => {
@@ -885,11 +988,7 @@ function selectMap(key) {
   if (!MAPS[key] || key === currentMapKey) return;
   buildLevel(key);
   yawObject.position.set(0, 1.7, 8);
-  roundScore = 0;
-  roundTransition = false;
-  updateRoundHud();
-  for (const target of targets.slice()) killTarget(target, false, true);
-  for (let i = 0; i < 4; i++) spawnRandomTarget();
+  startMatch();
   for (const btn of mapButtons) btn.classList.toggle('active', btn.dataset.map === key);
 }
 for (const btn of mapButtons) {
@@ -899,6 +998,22 @@ for (const btn of mapButtons) {
   });
 }
 for (const btn of mapButtons) btn.classList.toggle('active', btn.dataset.map === currentMapKey);
+
+// ----- mode selection -----------------------------------------------------
+const modeButtons = document.querySelectorAll('.modeBtn');
+function selectMode(mode) {
+  if (mode === gameMode) return;
+  gameMode = mode;
+  startMatch();
+  for (const btn of modeButtons) btn.classList.toggle('active', btn.dataset.mode === mode);
+}
+for (const btn of modeButtons) {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectMode(btn.dataset.mode);
+  });
+}
+for (const btn of modeButtons) btn.classList.toggle('active', btn.dataset.mode === gameMode);
 
 function updateMovement(dt) {
   const forward = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
@@ -1032,14 +1147,17 @@ function updateTargetAI(dt) {
       target.lookAt(lookTarget);
 
       if (target.userData.attackCooldown <= 0 && hasLineOfSight(eyePos, playerPos)) {
-        target.userData.attackCooldown = 1.2 + Math.random() * 1.4;
+        target.userData.attackCooldown = target.userData.isDuelist
+          ? 0.5 + Math.random() * 0.6
+          : 1.2 + Math.random() * 1.4;
         target.userData.muzzleLight.intensity = 3;
         setTimeout(() => { if (target.userData.muzzleLight) target.userData.muzzleLight.intensity = 0; }, 80);
         playEnemyShot();
 
         const accuracy = Math.max(0.25, 1 - dist / target.userData.attackRange);
-        if (Math.random() < accuracy * 0.7) {
-          damagePlayer(6 + Math.random() * 6);
+        const hitChance = target.userData.isDuelist ? accuracy : accuracy * 0.7;
+        if (Math.random() < hitChance) {
+          damagePlayer(target.userData.isDuelist ? 10 + Math.random() * 8 : 6 + Math.random() * 6);
         }
       }
     }

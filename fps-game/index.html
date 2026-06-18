@@ -83,21 +83,26 @@
     #blocker p { font-size: 14px; color: #aaa; margin: 4px 0; }
     #blocker.hidden { display: none; }
 
-    #mapSelect { display: flex; gap: 10px; margin-top: 18px; cursor: default; }
-    .mapBtn {
+    #modeSelect { display: flex; gap: 10px; margin-top: 14px; cursor: default; }
+    #mapSelect { display: flex; gap: 10px; margin-top: 10px; cursor: default; }
+    .mapBtn, .modeBtn {
       padding: 8px 16px; font-family: inherit; font-size: 13px; letter-spacing: 1px;
       color: #cdd; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25);
       border-radius: 4px; cursor: pointer;
     }
-    .mapBtn:hover { background: rgba(255,255,255,.16); }
-    .mapBtn.active { background: #9be86b; color: #14210a; border-color: #9be86b; font-weight: bold; }
+    .mapBtn:hover, .modeBtn:hover { background: rgba(255,255,255,.16); }
+    .mapBtn.active, .modeBtn.active { background: #9be86b; color: #14210a; border-color: #9be86b; font-weight: bold; }
   </style>
 </head>
 <body>
   <div id="blocker">
     <h1 id="blockerTitle">1FPS</h1>
     <p id="blockerSub">클릭해서 게임 시작 (마우스 잠금)</p>
-    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1~5 무기교체</p>
+    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1 주무기(순환) · 2 보조무기 · 3 근접무기</p>
+    <div id="modeSelect">
+      <button class="modeBtn" data-mode="range">사격장</button>
+      <button class="modeBtn" data-mode="duel">1대1 AI 대결</button>
+    </div>
     <div id="mapSelect">
       <button class="mapBtn" data-map="urban">도심 폐허</button>
       <button class="mapBtn" data-map="desert">사막 협곡</button>
@@ -116,7 +121,7 @@
       <div id="weaponName">RIFLE</div>
       <div id="ammoLine">AMMO <span id="ammo">12</span>/<span id="reserve">48</span></div>
     </div>
-    <div id="weaponSwitchHint">1 라이플 · 2 권총 · 3 칼 · 4 샷건 · 5 스나이퍼</div>
+    <div id="weaponSwitchHint">1 주무기(순환: 라이플·샷건·스나이퍼) · 2 보조무기(권총) · 3 근접무기(칼)</div>
     <div id="bottomRight">
       <div id="hpLine">HP <span id="hp">150</span>/150</div>
       <div id="healthbar"><div id="healthbarFill"></div></div>
