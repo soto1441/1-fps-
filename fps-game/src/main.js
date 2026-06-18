@@ -224,7 +224,7 @@ function buildLevel(key) {
 
   for (const [x, z] of cfg.coverPositions) {
     const size = 1.6 + Math.random() * 1.2;
-    const crate = makeBoxMesh(size, size, size, cfg.cover);
+    const crate = makeBoxMesh(size, size, size, cfg.cover, [1, 1]);
     crate.position.set(x, size / 2, z);
     scene.add(crate);
     addCollider(crate);
@@ -232,7 +232,7 @@ function buildLevel(key) {
   }
 
   for (const [w, h, d, x, y, z] of cfg.interiorWalls || []) {
-    const wall = makeBoxMesh(w, h, d, cfg.wall);
+    const wall = makeBoxMesh(w, h, d, cfg.wall, [Math.max(w, d) / 6, h / 3]);
     wall.position.set(x, y, z);
     scene.add(wall);
     addCollider(wall);
@@ -240,14 +240,19 @@ function buildLevel(key) {
   }
 
   for (const [x, z, w, d] of cfg.hazards || []) {
+    const lavaTex = makeNoiseTexture(0xff5522, { noise: 40 });
+    lavaTex.repeat.set(w / 3, d / 3);
     const lava = new THREE.Mesh(
       new THREE.BoxGeometry(w, 0.1, d),
-      new THREE.MeshStandardMaterial({ color: 0xff5522, emissive: 0xff3300, emissiveIntensity: 1.2, roughness: 0.5 })
+      new THREE.MeshStandardMaterial({
+        map: lavaTex, color: 0xffffff,
+        emissive: 0xff3300, emissiveIntensity: 1.2, roughness: 0.5,
+      })
     );
     lava.position.set(x, 0.05, z);
     scene.add(lava);
     levelMeshes.push(lava);
-    currentHazards.push({ x, z, w, d });
+    currentHazards.push({ x, z, w, d, mesh: lava });
   }
 }
 
@@ -341,9 +346,7 @@ function spawnTarget(x, z) {
   updateTargetHealthBar(group);
 }
 const MAX_TARGETS = 8;
-const SPAWN_INTERVAL = 4;
 const SPAWN_MIN_DIST_FROM_PLAYER = 10;
-let spawnTimer = SPAWN_INTERVAL;
 
 function spawnRandomTarget() {
   if (targets.length >= MAX_TARGETS) return;
@@ -718,7 +721,9 @@ function tryShoot() {
     }
     raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
     raycaster.far = range;
-    const hits = raycaster.intersectObjects(shootables(), false);
+    // include level colliders so walls/cover block shots instead of being
+    // transparent to hitscan (previously only target meshes were tested)
+    const hits = raycaster.intersectObjects(colliders.concat(shootables()), false);
     if (hits.length > 0) {
       const hit = hits[0];
       const target = targets.find((t) => t.userData.body === hit.object || t.userData.head === hit.object);
@@ -965,6 +970,12 @@ function updateRecoilRecovery(dt) {
   }
 }
 
+function updateHazards(t) {
+  for (const h of currentHazards) {
+    if (h.mesh) h.mesh.material.emissiveIntensity = 1.0 + Math.sin(t * 3) * 0.3;
+  }
+}
+
 function updateTargets(dt, t) {
   for (const target of targets) {
     target.userData.t += dt;
@@ -1053,12 +1064,7 @@ function animate() {
   }
   updateRecoilRecovery(dt);
   updateTargets(dt, clock.elapsedTime);
-
-  spawnTimer -= dt;
-  if (spawnTimer <= 0) {
-    spawnTimer = SPAWN_INTERVAL;
-    spawnRandomTarget();
-  }
+  updateHazards(clock.elapsedTime);
 
   renderer.render(scene, camera);
 }
