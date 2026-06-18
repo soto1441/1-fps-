@@ -144,13 +144,15 @@ const MAPS = {
     sky: 0x55667a, fogNear: 22, fogFar: 60,
     ground: 0x4a525c, wall: 0x6c7a8a, cover: 0x394048,
     coverPositions: [
-      [-16, -16], [16, 16], [-16, 16], [16, -16],
+      [-10, -10], [10, 10], [-10, 10], [10, -10], [0, -18], [0, 18],
     ],
+    // four short wall stubs around the center, each with open gaps between
+    // them so the middle stays fully walkable instead of a sealed room
     interiorWalls: [
-      [1, wallHeight, 20, -10, wallHeight / 2, 0],
-      [1, wallHeight, 20, 10, wallHeight / 2, 0],
-      [20, wallHeight, 1, 0, wallHeight / 2, -10],
-      [20, wallHeight, 1, 0, wallHeight / 2, 10],
+      [1, wallHeight, 8, -9, wallHeight / 2, 0],
+      [1, wallHeight, 8, 9, wallHeight / 2, 0],
+      [8, wallHeight, 1, 0, wallHeight / 2, -9],
+      [8, wallHeight, 1, 0, wallHeight / 2, 9],
     ],
   },
   backrooms: {
@@ -158,16 +160,17 @@ const MAPS = {
     sky: 0x4a4322, fogNear: 12, fogFar: 38,
     ground: 0xb6a356, wall: 0xcdba6a, cover: 0x8c7b3d,
     coverPositions: [
-      [-20, -20], [20, 20], [0, -22], [0, 22],
+      [-20, -20], [20, 20], [0, -22], [0, 22], [-20, 20], [20, -20],
     ],
+    // short partition stubs spaced apart so every room stays reachable
+    // (previous layout's segments lined up edge-to-edge into a closed maze)
     interiorWalls: [
-      [1, wallHeight, 16, -15, wallHeight / 2, -5],
-      [1, wallHeight, 16, -5, wallHeight / 2, 5],
-      [1, wallHeight, 16, 5, wallHeight / 2, -5],
-      [1, wallHeight, 16, 15, wallHeight / 2, 5],
-      [16, wallHeight, 1, -10, wallHeight / 2, -15],
-      [16, wallHeight, 1, 10, wallHeight / 2, 0],
-      [16, wallHeight, 1, -10, wallHeight / 2, 15],
+      [1, wallHeight, 10, -12, wallHeight / 2, -8],
+      [1, wallHeight, 10, -12, wallHeight / 2, 10],
+      [1, wallHeight, 10, 12, wallHeight / 2, -10],
+      [1, wallHeight, 10, 12, wallHeight / 2, 8],
+      [10, wallHeight, 1, -5, wallHeight / 2, 0],
+      [10, wallHeight, 1, 8, wallHeight / 2, -2],
     ],
   },
   onyx: {
