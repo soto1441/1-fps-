@@ -69,6 +69,14 @@
       position: absolute; top: 16px; right: 16px; font-size: 14px; color: #ffce5c; text-align: right;
     }
 
+    #killBanner {
+      position: absolute; top: 0; left: 0; width: 100%; height: 50px;
+      background: rgba(0,0,0,.55); color: #fff; font-size: 20px; font-weight: bold;
+      letter-spacing: 2px; display: flex; align-items: center; justify-content: center;
+      opacity: 0; transition: opacity .25s;
+    }
+    #killBanner.show { opacity: 1; }
+
     #roundLine {
       position: absolute; top: 16px; left: 50%; transform: translateX(-50%);
       font-size: 16px; letter-spacing: 2px; color: #d6ffb0; text-shadow: 0 0 4px #000;
@@ -119,7 +127,7 @@
   <div id="blocker">
     <h1 id="blockerTitle">1FPS</h1>
     <p id="blockerSub">클릭해서 게임 시작 (마우스 잠금)</p>
-    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1 주무기(순환) · 2 보조무기 · 3 근접무기 · B 무기 변경 · 스나이퍼 우클릭 줌</p>
+    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1 주무기(순환) · 2 보조무기 · 3 근접무기 · B 무기 변경 · 스나이퍼 우클릭 줌 · V 무기 살펴보기</p>
     <div id="modeSelect">
       <button class="modeBtn" data-mode="range">사격장</button>
       <button class="modeBtn" data-mode="duel">1대1 AI 대결</button>
@@ -135,6 +143,7 @@
   </div>
 
   <div id="hud">
+    <div id="killBanner"></div>
     <div id="roundLine">ROUND 0/5</div>
     <div id="crosshair"></div>
     <div id="hitmarker"></div>

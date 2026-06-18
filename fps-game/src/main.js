@@ -19,6 +19,7 @@ const hud = {
   flash: document.getElementById('flash'),
   killfeed: document.getElementById('killfeedList'),
   round: document.getElementById('roundLine'),
+  killBanner: document.getElementById('killBanner'),
 };
 
 // ----- renderer / scene / camera -----------------------------------
@@ -761,6 +762,15 @@ let kickTimer = 0;
 let kickBaseZ = 0;
 let weaponBloom = 0; // grows with sustained auto-fire, decays when not firing
 
+// V-key weapon inspect: a brief non-combat flourish, blocked while reloading
+const INSPECT_DURATION = 1.1;
+let inspectTimer = 0;
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'KeyV' && locked && inspectTimer <= 0 && !currentWeapon().reloading) {
+    inspectTimer = INSPECT_DURATION;
+  }
+});
+
 const raycaster = new THREE.Raycaster();
 const shootables = () => targets.flatMap((t) => [t.userData.body, t.userData.head]);
 
@@ -778,7 +788,7 @@ document.addEventListener('contextmenu', (e) => e.preventDefault());
 function tryShoot() {
   if (gameOver) return;
   const w = currentWeapon();
-  if (fireCooldown > 0 || w.reloading) return;
+  if (fireCooldown > 0 || w.reloading || inspectTimer > 0) return;
 
   if (!w.melee && !INFINITE_AMMO) {
     if (w.ammo <= 0) { playDry(); return; }
@@ -907,6 +917,7 @@ function onDuelKill() {
   playerScore++;
   updateRoundHud();
   addKillFeed(`AI 제거! ${playerScore}-${aiScore}`);
+  showKillBanner('YOU', 'AI');
   if (playerScore >= DUEL_ROUNDS_TO_WIN) {
     setTimeout(winGame, 600);
   } else {
@@ -927,6 +938,14 @@ function winGame() {
     ? `AI와의 1대1에서 ${DUEL_ROUNDS_TO_WIN}승 달성! 클릭해서 다시 시작`
     : `${ROUNDS_TO_WIN}라운드 클리어! 클릭해서 다시 시작`;
   blocker.classList.remove('hidden');
+}
+
+let killBannerTimer = null;
+function showKillBanner(killer, victim) {
+  hud.killBanner.textContent = `${killer}  ▶  ${victim}`;
+  hud.killBanner.classList.add('show');
+  clearTimeout(killBannerTimer);
+  killBannerTimer = setTimeout(() => hud.killBanner.classList.remove('show'), 2000);
 }
 
 function addKillFeed(text) {
@@ -986,6 +1005,7 @@ function killPlayer() {
     aiScore++;
     updateRoundHud();
     addKillFeed(`사망! ${playerScore}-${aiScore}`);
+    showKillBanner('AI', 'YOU');
     if (aiScore >= DUEL_ROUNDS_TO_WIN) {
       loseDuel();
     } else {
@@ -1143,6 +1163,16 @@ function updateRecoilRecovery(dt) {
     activeWeapon.position.z = kickBaseZ + 0.1 * (kickTimer / 0.08);
   } else {
     activeWeapon.position.z = kickBaseZ;
+  }
+
+  if (inspectTimer > 0) {
+    inspectTimer = Math.max(0, inspectTimer - dt);
+    const wobble = Math.sin((1 - inspectTimer / INSPECT_DURATION) * Math.PI);
+    activeWeapon.rotation.y = wobble * 0.5;
+    activeWeapon.rotation.x = wobble * 0.25;
+  } else {
+    activeWeapon.rotation.y = 0;
+    activeWeapon.rotation.x = 0;
   }
 
   for (const key in weaponMuzzles) {
