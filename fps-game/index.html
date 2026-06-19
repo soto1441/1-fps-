@@ -113,15 +113,18 @@
       color: #eee;
     }
     #buyMenu.hidden { display: none; }
-    .buyMenuInner { display: flex; gap: 14px; }
+    .buyMenuInner {
+      display: flex; flex-wrap: wrap; gap: 10px; justify-content: center;
+      max-width: 1100px; max-height: 80vh; overflow-y: auto;
+    }
     .buyCol {
       background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.2);
-      border-radius: 6px; padding: 10px; min-width: 120px; text-align: center;
+      border-radius: 6px; padding: 8px; min-width: 108px; text-align: center;
     }
-    .buyCol h3 { font-size: 13px; color: #9be86b; margin: 0 0 10px; letter-spacing: 1px; }
+    .buyCol h3 { font-size: 12px; color: #9be86b; margin: 0 0 8px; letter-spacing: 1px; }
     .buyBtn {
-      display: block; width: 100%; padding: 10px 8px; margin-bottom: 8px;
-      font-family: inherit; font-size: 13px; color: #cdd; background: rgba(255,255,255,.08);
+      display: block; width: 100%; padding: 7px 6px; margin-bottom: 6px;
+      font-family: inherit; font-size: 12px; color: #cdd; background: rgba(255,255,255,.08);
       border: 1px solid rgba(255,255,255,.25); border-radius: 4px; cursor: pointer;
     }
     .buyBtn:hover { background: rgba(255,255,255,.18); }
@@ -161,7 +164,7 @@
       <div id="weaponName">RIFLE</div>
       <div id="ammoLine">AMMO <span id="ammo">12</span>/<span id="reserve">48</span></div>
     </div>
-    <div id="weaponSwitchHint">1 주무기(순환: 라이플·샷건·스나이퍼) · 2 보조무기(권총) · 3 근접무기(칼)</div>
+    <div id="weaponSwitchHint">1 주무기(순환) · 2 사이드암(순환) · 3 근접무기 · B 구매창</div>
     <div id="bottomRight">
       <div id="hpLine">HP <span id="hp">150</span>/150</div>
       <div id="healthbar"><div id="healthbarFill"></div></div>
@@ -176,20 +179,40 @@
     <p id="buyCreditsLine">보유 크레딧 <span id="buyCredits">800</span></p>
     <div class="buyMenuInner">
       <div class="buyCol">
-        <h3>보조무기</h3>
-        <button class="buyBtn" data-weapon="pistol">권총 <span class="buyCost">0</span></button>
+        <h3>사이드암</h3>
+        <button class="buyBtn" data-weapon="classic">클래식 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="shorty">쇼티 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="frenzy">프렌지 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="ghost">고스트 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="sheriff">쉐리프 <span class="buyCost">0</span></button>
       </div>
       <div class="buyCol">
-        <h3>산탄총</h3>
-        <button class="buyBtn" data-weapon="shotgun">샷건 <span class="buyCost">0</span></button>
+        <h3>SMG</h3>
+        <button class="buyBtn" data-weapon="stinger">스팅어 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="spectre">스펙터 <span class="buyCost">0</span></button>
       </div>
       <div class="buyCol">
-        <h3>소총</h3>
-        <button class="buyBtn" data-weapon="rifle">라이플 <span class="buyCost">0</span></button>
+        <h3>샷건</h3>
+        <button class="buyBtn" data-weapon="bucky">버키 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="judge">저지 <span class="buyCost">0</span></button>
+      </div>
+      <div class="buyCol">
+        <h3>라이플</h3>
+        <button class="buyBtn" data-weapon="bulldog">불도그 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="guardian">가디언 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="phantom">팬텀 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="vandal">반달 <span class="buyCost">0</span></button>
       </div>
       <div class="buyCol">
         <h3>저격소총</h3>
-        <button class="buyBtn" data-weapon="sniper">스나이퍼 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="marshal">마샬 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="outlaw">아웃로 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="operator">오퍼레이터 <span class="buyCost">0</span></button>
+      </div>
+      <div class="buyCol">
+        <h3>중화기</h3>
+        <button class="buyBtn" data-weapon="ares">에레스 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-weapon="odin">오딘 <span class="buyCost">0</span></button>
       </div>
       <div class="buyCol">
         <h3>근접무기</h3>

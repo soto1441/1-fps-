@@ -527,12 +527,34 @@ weaponSniper.visible = false;
 camera.add(weaponSniper);
 const sniperMuzzle = buildMuzzle(weaponSniper, new THREE.Vector3(0, 0.02, -0.75));
 
-const weaponModels = { rifle: weaponRifle, pistol: weaponPistol, knife: weaponKnife, shotgun: weaponShotgun, sniper: weaponSniper };
-const weaponMuzzles = { rifle: rifleMuzzle, pistol: pistolMuzzle, knife: null, shotgun: shotgunMuzzle, sniper: sniperMuzzle };
-const weaponRestZ = {
+// Valorant has a unique mesh per gun; this prototype reuses one viewmodel per
+// weapon category (sidearm/SMG/shotgun/rifle/sniper/heavy/melee) and lets the
+// economy/stat layer (WEAPONS below) carry the per-gun identity instead
+const baseModels = { rifle: weaponRifle, pistol: weaponPistol, knife: weaponKnife, shotgun: weaponShotgun, sniper: weaponSniper };
+const baseMuzzles = { rifle: rifleMuzzle, pistol: pistolMuzzle, knife: null, shotgun: shotgunMuzzle, sniper: sniperMuzzle };
+const baseRestZ = {
   rifle: weaponRifle.position.z, pistol: weaponPistol.position.z, knife: weaponKnife.position.z,
   shotgun: weaponShotgun.position.z, sniper: weaponSniper.position.z,
 };
+const WEAPON_VISUAL = {
+  classic: 'pistol', shorty: 'pistol', frenzy: 'pistol', ghost: 'pistol', sheriff: 'pistol',
+  stinger: 'rifle', spectre: 'rifle',
+  bucky: 'shotgun', judge: 'shotgun',
+  bulldog: 'rifle', guardian: 'rifle', phantom: 'rifle', vandal: 'rifle',
+  marshal: 'sniper', outlaw: 'sniper', operator: 'sniper',
+  ares: 'rifle', odin: 'rifle',
+  knife: 'knife',
+};
+const weaponModels = {};
+const weaponMuzzles = {};
+const weaponRestZ = {};
+for (const key in WEAPON_VISUAL) {
+  const cat = WEAPON_VISUAL[key];
+  weaponModels[key] = baseModels[cat];
+  weaponMuzzles[key] = baseMuzzles[cat];
+  weaponRestZ[key] = baseRestZ[cat];
+}
+const SNIPER_KEYS = ['marshal', 'outlaw', 'operator'];
 
 // ----- input / pointer lock --------------------------------------------
 const keys = {};
@@ -608,44 +630,142 @@ function playHit() {
 }
 
 // ----- weapon state -------------------------------------------------------
+// fixed up-then-side spray pattern (deg), CS/Valorant-style, shared by the
+// two full-auto rifles (applied in shot order instead of pure randomness
+// while sustaining automatic fire)
+const RIFLE_SPRAY = [
+  [0, 0.3], [0, 0.6], [0, 0.9], [0.1, 1.2], [0.3, 1.4],
+  [0.6, 1.5], [1.0, 1.4], [1.4, 1.2], [1.7, 0.9], [1.9, 0.6],
+  [2.0, 0.3], [2.0, 0.1],
+];
+
 const WEAPONS = {
-  rifle: {
-    name: 'RIFLE', melee: false, auto: true,
-    magSize: 12, ammo: 12, reserve: 48,
-    fireRate: 0.14, reloadTime: 1200, dmgBody: 34, dmgHead: 100, dmgLeg: 22,
+  // ----- sidearms -----
+  classic: {
+    name: 'CLASSIC', melee: false, auto: false,
+    magSize: 12, ammo: 12, reserve: 36,
+    fireRate: 0.2, reloadTime: 1300, dmgBody: 18, dmgHead: 55, dmgLeg: 12,
+    recoil: 0.02, reloading: false, cost: 0,
+  },
+  shorty: {
+    name: 'SHORTY', melee: false, auto: false,
+    magSize: 2, ammo: 2, reserve: 6,
+    fireRate: 0.6, reloadTime: 1600, dmgBody: 10, dmgHead: 18, dmgLeg: 7,
+    pellets: 5, spreadDeg: 7,
+    recoil: 0.05, reloading: false, cost: 200,
+  },
+  frenzy: {
+    name: 'FRENZY', melee: false, auto: true,
+    magSize: 13, ammo: 13, reserve: 39,
+    fireRate: 0.1, reloadTime: 1300, dmgBody: 16, dmgHead: 45, dmgLeg: 10,
+    recoil: 0.04, reloading: false, cost: 450,
+  },
+  ghost: {
+    name: 'GHOST', melee: false, auto: false,
+    magSize: 15, ammo: 15, reserve: 30,
+    fireRate: 0.18, reloadTime: 1300, dmgBody: 20, dmgHead: 78, dmgLeg: 13,
+    recoil: 0.025, reloading: false, cost: 500,
+  },
+  sheriff: {
+    name: 'SHERIFF', melee: false, auto: false,
+    magSize: 6, ammo: 6, reserve: 12,
+    fireRate: 0.35, reloadTime: 1600, dmgBody: 28, dmgHead: 100, dmgLeg: 18,
+    recoil: 0.05, reloading: false, cost: 800,
+  },
+  // ----- SMGs -----
+  stinger: {
+    name: 'STINGER', melee: false, auto: true,
+    magSize: 20, ammo: 20, reserve: 60,
+    fireRate: 0.08, reloadTime: 1500, dmgBody: 18, dmgHead: 50, dmgLeg: 12,
+    recoil: 0.035, reloading: false, cost: 1000,
+  },
+  spectre: {
+    name: 'SPECTRE', melee: false, auto: true,
+    magSize: 22, ammo: 22, reserve: 66,
+    fireRate: 0.09, reloadTime: 1700, dmgBody: 20, dmgHead: 58, dmgLeg: 13,
+    recoil: 0.03, reloading: false, cost: 1600,
+  },
+  // ----- shotguns -----
+  bucky: {
+    name: 'BUCKY', melee: false, auto: false,
+    magSize: 5, ammo: 5, reserve: 15,
+    fireRate: 0.8, reloadTime: 2000, dmgBody: 12, dmgHead: 20, dmgLeg: 9,
+    pellets: 10, spreadDeg: 7,
+    recoil: 0.08, reloading: false, cost: 850,
+  },
+  judge: {
+    name: 'JUDGE', melee: false, auto: false,
+    magSize: 7, ammo: 7, reserve: 21,
+    fireRate: 0.55, reloadTime: 2000, dmgBody: 11, dmgHead: 18, dmgLeg: 8,
+    pellets: 9, spreadDeg: 6,
+    recoil: 0.07, reloading: false, cost: 1850,
+  },
+  // ----- rifles -----
+  bulldog: {
+    name: 'BULLDOG', melee: false, auto: false,
+    magSize: 24, ammo: 24, reserve: 72,
+    fireRate: 0.15, reloadTime: 1500, dmgBody: 26, dmgHead: 78, dmgLeg: 17,
+    recoil: 0.035, reloading: false, cost: 2050,
+  },
+  guardian: {
+    name: 'GUARDIAN', melee: false, auto: false,
+    magSize: 12, ammo: 12, reserve: 36,
+    fireRate: 0.25, reloadTime: 1700, dmgBody: 36, dmgHead: 130, dmgLeg: 24,
+    recoil: 0.03, reloading: false, cost: 2250,
+  },
+  phantom: {
+    name: 'PHANTOM', melee: false, auto: true,
+    magSize: 30, ammo: 30, reserve: 90,
+    fireRate: 0.1, reloadTime: 1800, dmgBody: 32, dmgHead: 88, dmgLeg: 21,
+    recoil: 0.04, reloading: false, cost: 2900,
+    bloomGrowDeg: 0.45, maxSpreadDeg: 3.2,
+    sprayPattern: RIFLE_SPRAY,
+  },
+  vandal: {
+    name: 'VANDAL', melee: false, auto: true,
+    magSize: 25, ammo: 25, reserve: 75,
+    fireRate: 0.12, reloadTime: 1900, dmgBody: 34, dmgHead: 100, dmgLeg: 22,
     recoil: 0.045, reloading: false, cost: 2900,
     bloomGrowDeg: 0.45, maxSpreadDeg: 3.2,
-    // fixed up-then-side spray pattern (deg), CS/Valorant-style, applied in
-    // shot order instead of pure randomness while sustaining automatic fire
-    sprayPattern: [
-      [0, 0.3], [0, 0.6], [0, 0.9], [0.1, 1.2], [0.3, 1.4],
-      [0.6, 1.5], [1.0, 1.4], [1.4, 1.2], [1.7, 0.9], [1.9, 0.6],
-      [2.0, 0.3], [2.0, 0.1],
-    ],
+    sprayPattern: RIFLE_SPRAY,
   },
-  pistol: {
-    name: 'PISTOL', melee: false, auto: false,
-    magSize: 8, ammo: 8, reserve: 32,
-    fireRate: 0.28, reloadTime: 900, dmgBody: 22, dmgHead: 70, dmgLeg: 14,
-    recoil: 0.03, reloading: false, cost: 0,
+  // ----- sniper rifles -----
+  marshal: {
+    name: 'MARSHAL', melee: false, auto: false,
+    magSize: 5, ammo: 5, reserve: 15,
+    fireRate: 1.1, reloadTime: 1800, dmgBody: 60, dmgHead: 200, dmgLeg: 40,
+    recoil: 0.07, reloading: false, cost: 1100,
   },
+  outlaw: {
+    name: 'OUTLAW', melee: false, auto: false,
+    magSize: 2, ammo: 2, reserve: 6,
+    fireRate: 1.3, reloadTime: 2200, dmgBody: 70, dmgHead: 240, dmgLeg: 45,
+    recoil: 0.08, reloading: false, cost: 2400,
+  },
+  operator: {
+    name: 'OPERATOR', melee: false, auto: false,
+    magSize: 4, ammo: 4, reserve: 12,
+    fireRate: 1.5, reloadTime: 2000, dmgBody: 80, dmgHead: 300, dmgLeg: 50,
+    recoil: 0.09, reloading: false, cost: 4700,
+  },
+  // ----- heavy -----
+  ares: {
+    name: 'ARES', melee: false, auto: true,
+    magSize: 40, ammo: 40, reserve: 80,
+    fireRate: 0.1, reloadTime: 2500, dmgBody: 22, dmgHead: 65, dmgLeg: 15,
+    recoil: 0.05, reloading: false, cost: 1600,
+  },
+  odin: {
+    name: 'ODIN', melee: false, auto: true,
+    magSize: 60, ammo: 60, reserve: 120,
+    fireRate: 0.08, reloadTime: 3000, dmgBody: 24, dmgHead: 70, dmgLeg: 16,
+    recoil: 0.055, reloading: false, cost: 3200,
+  },
+  // ----- melee -----
   knife: {
     name: 'KNIFE', melee: true, auto: false,
     range: 2.4, fireRate: 0.45, dmgBody: 60, dmgHead: 60, dmgLeg: 60,
     recoil: 0, reloading: false, cost: 0,
-  },
-  shotgun: {
-    name: 'SHOTGUN', melee: false, auto: false,
-    magSize: 6, ammo: 6, reserve: 24,
-    fireRate: 0.7, reloadTime: 1800, dmgBody: 16, dmgHead: 26, dmgLeg: 11,
-    pellets: 8, spreadDeg: 5,
-    recoil: 0.07, reloading: false, cost: 1100,
-  },
-  sniper: {
-    name: 'SNIPER', melee: false, auto: false,
-    magSize: 4, ammo: 4, reserve: 12,
-    fireRate: 1.5, reloadTime: 2000, dmgBody: 80, dmgHead: 300, dmgLeg: 50,
-    recoil: 0.09, reloading: false, cost: 4700,
   },
 };
 
@@ -660,7 +780,7 @@ let gameMode = 'range';
 function infiniteAmmo() { return gameMode === 'range'; }
 const WEAPON_DEFAULTS = JSON.parse(JSON.stringify(WEAPONS));
 
-let currentWeaponKey = 'rifle';
+let currentWeaponKey = 'vandal';
 let fireCooldown = 0;
 
 function currentWeapon() {
@@ -686,22 +806,24 @@ function setWeapon(key) {
   kickTimer = 0;
   weaponBloom = 0;
   weaponShotCount = 0;
-  for (const k in weaponModels) weaponModels[k].visible = k === key;
+  const activeCategory = WEAPON_VISUAL[key];
+  for (const cat in baseModels) baseModels[cat].visible = cat === activeCategory;
   updateAmmoHud();
-  if (key !== 'sniper') setZoom(false);
+  if (!SNIPER_KEYS.includes(key)) setZoom(false);
 }
 
-// weapon categories à la Valorant/Rivals: slot 1 cycles primaries, slot 2
-// is the secondary, slot 3 is melee
+// weapon categories à la Valorant: slot 1 cycles primaries (SMG/shotgun/
+// rifle/sniper/heavy), slot 2 is the sidearm, slot 3 is melee
 const WEAPON_SLOTS = {
-  primary: ['rifle', 'shotgun', 'sniper'],
-  secondary: ['pistol'],
+  primary: ['stinger', 'spectre', 'bucky', 'judge', 'bulldog', 'guardian', 'phantom', 'vandal', 'marshal', 'outlaw', 'operator', 'ares', 'odin'],
+  secondary: ['classic', 'shorty', 'frenzy', 'ghost', 'sheriff'],
   melee: ['knife'],
 };
 let primaryIndex = 0;
-// duel mode gates weapons behind the buy menu like Valorant's economy; range
-// mode (aim practice) keeps every weapon unlocked since there's no economy
-let ownedWeapons = new Set(['rifle', 'pistol', 'knife']);
+// duel mode gates weapons behind the buy menu like Valorant's economy: you
+// only start owning the classic pistol + knife and must buy everything else.
+// range mode (aim practice) keeps every weapon unlocked since there's no economy
+let ownedWeapons = new Set(['classic', 'knife']);
 
 function pickSlot(slotKey) {
   const list = gameMode === 'duel' ? WEAPON_SLOTS[slotKey].filter((k) => ownedWeapons.has(k)) : WEAPON_SLOTS[slotKey];
@@ -832,7 +954,7 @@ function setZoom(on) {
   camera.updateProjectionMatrix();
 }
 document.addEventListener('mousedown', (e) => {
-  if (e.button === 2 && locked && currentWeaponKey === 'sniper') setZoom(true);
+  if (e.button === 2 && locked && SNIPER_KEYS.includes(currentWeaponKey)) setZoom(true);
 });
 document.addEventListener('mouseup', (e) => {
   if (e.button === 2) setZoom(false);
@@ -1109,7 +1231,7 @@ updateHealthHud();
 
 function updateArmorHud() {
   hud.armor.textContent = Math.max(0, Math.round(playerArmor));
-  hud.armorLine.classList.toggle('hidden', gameMode !== 'duel' || playerArmor <= 0);
+  hud.armorLine.classList.toggle('hidden', gameMode !== 'duel');
 }
 updateArmorHud();
 
@@ -1196,8 +1318,9 @@ function startMatch() {
     aiScore = 0;
     playerArmor = 0;
     playerCredits = STARTING_CREDITS;
-    ownedWeapons = new Set(['rifle', 'pistol', 'knife']);
-    setWeapon('rifle');
+    ownedWeapons = new Set(['classic', 'knife']);
+    currentWeaponKey = 'knife'; // force setWeapon below to actually switch
+    setWeapon('classic');
     primaryIndex = 0;
     updateArmorHud();
     updateCreditsHud();
@@ -1338,8 +1461,8 @@ function updateRecoilRecovery(dt) {
     activeWeapon.rotation.x = 0;
   }
 
-  for (const key in weaponMuzzles) {
-    const muzzle = weaponMuzzles[key];
+  for (const key in baseMuzzles) {
+    const muzzle = baseMuzzles[key];
     if (!muzzle) continue;
     muzzle.light.intensity *= Math.max(0, 1 - dt * 18);
     muzzle.sprite.material.opacity *= Math.max(0, 1 - dt * 18);
