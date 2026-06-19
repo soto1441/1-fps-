@@ -22,6 +22,9 @@ const hud = {
   killBanner: document.getElementById('killBanner'),
   armor: document.getElementById('armor'),
   armorLine: document.getElementById('armorLine'),
+  credits: document.getElementById('credits'),
+  creditsLine: document.getElementById('creditsLine'),
+  buyCredits: document.getElementById('buyCredits'),
 };
 
 // ----- renderer / scene / camera -----------------------------------
@@ -610,7 +613,7 @@ const WEAPONS = {
     name: 'RIFLE', melee: false, auto: true,
     magSize: 12, ammo: 12, reserve: 48,
     fireRate: 0.14, reloadTime: 1200, dmgBody: 34, dmgHead: 100, dmgLeg: 22,
-    recoil: 0.045, reloading: false,
+    recoil: 0.045, reloading: false, cost: 2900,
     bloomGrowDeg: 0.45, maxSpreadDeg: 3.2,
     // fixed up-then-side spray pattern (deg), CS/Valorant-style, applied in
     // shot order instead of pure randomness while sustaining automatic fire
@@ -624,27 +627,33 @@ const WEAPONS = {
     name: 'PISTOL', melee: false, auto: false,
     magSize: 8, ammo: 8, reserve: 32,
     fireRate: 0.28, reloadTime: 900, dmgBody: 22, dmgHead: 70, dmgLeg: 14,
-    recoil: 0.03, reloading: false,
+    recoil: 0.03, reloading: false, cost: 0,
   },
   knife: {
     name: 'KNIFE', melee: true, auto: false,
     range: 2.4, fireRate: 0.45, dmgBody: 60, dmgHead: 60, dmgLeg: 60,
-    recoil: 0, reloading: false,
+    recoil: 0, reloading: false, cost: 0,
   },
   shotgun: {
     name: 'SHOTGUN', melee: false, auto: false,
     magSize: 6, ammo: 6, reserve: 24,
     fireRate: 0.7, reloadTime: 1800, dmgBody: 16, dmgHead: 26, dmgLeg: 11,
     pellets: 8, spreadDeg: 5,
-    recoil: 0.07, reloading: false,
+    recoil: 0.07, reloading: false, cost: 1100,
   },
   sniper: {
     name: 'SNIPER', melee: false, auto: false,
     magSize: 4, ammo: 4, reserve: 12,
     fireRate: 1.5, reloadTime: 2000, dmgBody: 80, dmgHead: 300, dmgLeg: 50,
-    recoil: 0.09, reloading: false,
+    recoil: 0.09, reloading: false, cost: 4700,
   },
 };
+
+const ARMOR_TIERS = { light: { cost: 400, value: 25 }, heavy: { cost: 1000, value: 50 } };
+const STARTING_CREDITS = 800;
+const KILL_REWARD = 200;
+const ROUND_WIN_REWARD = 3000;
+const ROUND_LOSS_REWARD = 1900;
 
 let gameMode = 'range';
 // 사격장(range)은 에임 연습이라 무한탄, 1대1 대결(duel)은 진짜 탄약/재장전이 의미 있게 작동
@@ -690,11 +699,16 @@ const WEAPON_SLOTS = {
   melee: ['knife'],
 };
 let primaryIndex = 0;
+// duel mode gates weapons behind the buy menu like Valorant's economy; range
+// mode (aim practice) keeps every weapon unlocked since there's no economy
+let ownedWeapons = new Set(['rifle', 'pistol', 'knife']);
 
 function pickSlot(slotKey) {
-  const list = WEAPON_SLOTS[slotKey];
+  const list = gameMode === 'duel' ? WEAPON_SLOTS[slotKey].filter((k) => ownedWeapons.has(k)) : WEAPON_SLOTS[slotKey];
+  if (list.length === 0) return;
   if (slotKey === 'primary') {
     if (list.includes(currentWeaponKey)) primaryIndex = (primaryIndex + 1) % list.length;
+    else primaryIndex = 0;
     setWeapon(list[primaryIndex]);
   } else {
     setWeapon(list[0]);
@@ -714,8 +728,25 @@ const buyMenu = document.getElementById('buyMenu');
 const buyButtons = document.querySelectorAll('.buyBtn');
 let buyMenuOpen = false;
 
-function highlightBuyMenu() {
-  for (const btn of buyButtons) btn.classList.toggle('active', btn.dataset.weapon === currentWeaponKey);
+function refreshBuyMenu() {
+  hud.buyCredits.textContent = playerCredits;
+  for (const btn of buyButtons) {
+    const weaponKey = btn.dataset.weapon;
+    const armorKey = btn.dataset.armor;
+    const costEl = btn.querySelector('.buyCost');
+    if (weaponKey) {
+      const owned = ownedWeapons.has(weaponKey);
+      const cost = WEAPONS[weaponKey].cost;
+      if (costEl) costEl.textContent = owned ? '보유중' : cost > 0 ? `${cost} CR` : 'FREE';
+      btn.classList.toggle('unaffordable', !owned && cost > playerCredits);
+      btn.classList.toggle('active', weaponKey === currentWeaponKey);
+    } else if (armorKey) {
+      const tier = ARMOR_TIERS[armorKey];
+      if (costEl) costEl.textContent = `${tier.cost} CR`;
+      btn.classList.toggle('unaffordable', tier.cost > playerCredits);
+      btn.classList.toggle('active', playerArmor === tier.value);
+    }
+  }
 }
 
 function toggleBuyMenu(force) {
@@ -725,7 +756,7 @@ function toggleBuyMenu(force) {
   if (buyMenuOpen) {
     setZoom(false);
     document.exitPointerLock();
-    highlightBuyMenu();
+    refreshBuyMenu();
   } else {
     renderer.domElement.requestPointerLock();
   }
@@ -765,11 +796,28 @@ function updateBuyPhase(dt) {
 for (const btn of buyButtons) {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    const key = btn.dataset.weapon;
-    setWeapon(key);
-    const idx = WEAPON_SLOTS.primary.indexOf(key);
-    if (idx !== -1) primaryIndex = idx;
-    toggleBuyMenu(false);
+    const weaponKey = btn.dataset.weapon;
+    const armorKey = btn.dataset.armor;
+    if (weaponKey) {
+      const alreadyOwned = ownedWeapons.has(weaponKey);
+      const cost = alreadyOwned ? 0 : WEAPONS[weaponKey].cost;
+      if (cost > playerCredits) return;
+      playerCredits -= cost;
+      ownedWeapons.add(weaponKey);
+      setWeapon(weaponKey);
+      const idx = WEAPON_SLOTS.primary.indexOf(weaponKey);
+      if (idx !== -1) primaryIndex = idx;
+      updateCreditsHud();
+      refreshBuyMenu();
+    } else if (armorKey) {
+      const tier = ARMOR_TIERS[armorKey];
+      if (tier.cost > playerCredits) return;
+      playerCredits -= tier.cost;
+      playerArmor = tier.value;
+      updateCreditsHud();
+      updateArmorHud();
+      refreshBuyMenu();
+    }
   });
 }
 
@@ -979,12 +1027,14 @@ function onDuelKill() {
   updateRoundHud();
   addKillFeed(`AI 제거! ${playerScore}-${aiScore}`);
   showKillBanner('YOU', 'AI');
+  playerCredits += ROUND_WIN_REWARD;
+  updateCreditsHud();
   if (playerScore >= DUEL_ROUNDS_TO_WIN) {
     setTimeout(winGame, 600);
   } else {
     setTimeout(() => {
       playerHp = PLAYER_MAX_HP;
-      playerArmor = 50;
+      playerArmor = 0;
       updateHealthHud();
       updateArmorHud();
       refillAmmo();
@@ -1063,6 +1113,14 @@ function updateArmorHud() {
 }
 updateArmorHud();
 
+let playerCredits = STARTING_CREDITS;
+function updateCreditsHud() {
+  hud.credits.textContent = playerCredits;
+  hud.buyCredits.textContent = playerCredits;
+  hud.creditsLine.classList.toggle('hidden', gameMode !== 'duel');
+}
+updateCreditsHud();
+
 function damagePlayer(amount) {
   if (gameOver) return;
   let final = amount;
@@ -1086,12 +1144,14 @@ function killPlayer() {
     updateRoundHud();
     addKillFeed(`사망! ${playerScore}-${aiScore}`);
     showKillBanner('AI', 'YOU');
+    playerCredits += ROUND_LOSS_REWARD;
+    updateCreditsHud();
     if (aiScore >= DUEL_ROUNDS_TO_WIN) {
       loseDuel();
     } else {
       setTimeout(() => {
         playerHp = PLAYER_MAX_HP;
-        playerArmor = 50;
+        playerArmor = 0;
         updateHealthHud();
         updateArmorHud();
         yawObject.position.set(0, 1.7, 8);
@@ -1134,8 +1194,13 @@ function startMatch() {
   if (gameMode === 'duel') {
     playerScore = 0;
     aiScore = 0;
-    playerArmor = 50;
+    playerArmor = 0;
+    playerCredits = STARTING_CREDITS;
+    ownedWeapons = new Set(['rifle', 'pistol', 'knife']);
+    setWeapon('rifle');
+    primaryIndex = 0;
     updateArmorHud();
+    updateCreditsHud();
     updateRoundHud();
     spawnDuelOpponent();
   } else {
@@ -1143,6 +1208,7 @@ function startMatch() {
     roundTransition = false;
     playerArmor = 0;
     updateArmorHud();
+    updateCreditsHud();
     updateRoundHud();
     for (let i = 0; i < 4; i++) spawnRandomTarget();
   }

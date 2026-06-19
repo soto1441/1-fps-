@@ -48,6 +48,9 @@
     #armorLine { font-size: 13px; color: #7fb8e0; margin-top: 4px; }
     #armorLine span { color: #bfe3ff; font-weight: bold; }
     #armorLine.hidden { display: none; }
+    #creditsLine { font-size: 13px; color: #ffce5c; margin-top: 4px; }
+    #creditsLine span { color: #ffe39a; font-weight: bold; }
+    #creditsLine.hidden { display: none; }
 
     #weaponSwitchHint {
       position: absolute; left: 24px; bottom: 70px; font-size: 12px; color: #889;
@@ -124,6 +127,10 @@
     .buyBtn:hover { background: rgba(255,255,255,.18); }
     .buyBtn.active { background: #9be86b; color: #14210a; font-weight: bold; border-color: #9be86b; }
     .buyHint { margin-top: 16px; font-size: 12px; color: #889; }
+    #buyCreditsLine { font-size: 14px; color: #ffce5c; margin-bottom: 14px; letter-spacing: 1px; }
+    #buyCreditsLine span { color: #ffe39a; font-weight: bold; }
+    .buyCost { display: block; font-size: 11px; color: #ffce5c; margin-top: 2px; }
+    .buyBtn.unaffordable { opacity: .4; cursor: not-allowed; }
   </style>
 </head>
 <body>
@@ -159,32 +166,39 @@
       <div id="hpLine">HP <span id="hp">150</span>/150</div>
       <div id="healthbar"><div id="healthbarFill"></div></div>
       <div id="armorLine" class="hidden">방어구 <span id="armor">0</span></div>
+      <div id="creditsLine" class="hidden">크레딧 <span id="credits">800</span></div>
     </div>
     <div id="killfeedList"></div>
   </div>
   <div id="flash"></div>
 
   <div id="buyMenu" class="hidden">
+    <p id="buyCreditsLine">보유 크레딧 <span id="buyCredits">800</span></p>
     <div class="buyMenuInner">
       <div class="buyCol">
         <h3>보조무기</h3>
-        <button class="buyBtn" data-weapon="pistol">권총</button>
+        <button class="buyBtn" data-weapon="pistol">권총 <span class="buyCost">0</span></button>
       </div>
       <div class="buyCol">
         <h3>산탄총</h3>
-        <button class="buyBtn" data-weapon="shotgun">샷건</button>
+        <button class="buyBtn" data-weapon="shotgun">샷건 <span class="buyCost">0</span></button>
       </div>
       <div class="buyCol">
         <h3>소총</h3>
-        <button class="buyBtn" data-weapon="rifle">라이플</button>
+        <button class="buyBtn" data-weapon="rifle">라이플 <span class="buyCost">0</span></button>
       </div>
       <div class="buyCol">
         <h3>저격소총</h3>
-        <button class="buyBtn" data-weapon="sniper">스나이퍼</button>
+        <button class="buyBtn" data-weapon="sniper">스나이퍼 <span class="buyCost">0</span></button>
       </div>
       <div class="buyCol">
         <h3>근접무기</h3>
-        <button class="buyBtn" data-weapon="knife">나이프</button>
+        <button class="buyBtn" data-weapon="knife">나이프 <span class="buyCost">0</span></button>
+      </div>
+      <div class="buyCol">
+        <h3>방어구</h3>
+        <button class="buyBtn" data-armor="light">경량 방어구 <span class="buyCost">0</span></button>
+        <button class="buyBtn" data-armor="heavy">중량 방어구 <span class="buyCost">0</span></button>
       </div>
     </div>
     <p class="buyHint">B 키로 닫기</p>
