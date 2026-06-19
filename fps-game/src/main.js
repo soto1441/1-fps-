@@ -15,6 +15,7 @@ const hud = {
   weaponName: document.getElementById('weaponName'),
   healthbarFill: document.getElementById('healthbarFill'),
   crosshair: document.getElementById('crosshair'),
+  scopeOverlay: document.getElementById('scopeOverlay'),
   hitmarker: document.getElementById('hitmarker'),
   flash: document.getElementById('flash'),
   killfeed: document.getElementById('killfeedList'),
@@ -952,6 +953,8 @@ function setZoom(on) {
   zoomed = on;
   camera.fov = zoomed ? SNIPER_ZOOM_FOV : DEFAULT_FOV;
   camera.updateProjectionMatrix();
+  hud.scopeOverlay.classList.toggle('show', zoomed);
+  hud.crosshair.classList.toggle('zoomed', zoomed);
 }
 document.addEventListener('mousedown', (e) => {
   if (e.button === 2 && locked && SNIPER_KEYS.includes(currentWeaponKey)) setZoom(true);

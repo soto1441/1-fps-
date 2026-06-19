@@ -22,6 +22,28 @@
     #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
     #crosshair::after  { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
     #crosshair.shoot { filter: brightness(2.2); }
+    #crosshair.zoomed { display: none; }
+
+    #scopeOverlay {
+      position: fixed; top: 50%; left: 50%; width: 0; height: 0;
+      transform: translate(-50%, -50%); border-radius: 50%;
+      box-shadow: 0 0 0 9999px #000;
+      opacity: 0; pointer-events: none; transition: opacity .08s;
+    }
+    #scopeOverlay.show { opacity: 1; width: 480px; height: 480px; }
+    #scopeOverlay::before, #scopeOverlay::after {
+      content: ''; position: absolute; background: #000;
+    }
+    #scopeOverlay::before { left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
+    #scopeOverlay::after  { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
+    #scopeDot {
+      position: absolute; top: 50%; left: 50%; width: 4px; height: 4px;
+      transform: translate(-50%, -50%); background: #d6ffb0; border-radius: 50%;
+    }
+    #scopeRing {
+      position: absolute; inset: 0; border-radius: 50%;
+      border: 3px solid #000; box-shadow: 0 0 18px 6px rgba(0,0,0,.6) inset;
+    }
 
     #bottomLeft {
       position: absolute; left: 24px; bottom: 20px; text-align: left;
@@ -159,6 +181,7 @@
     <div id="killBanner"></div>
     <div id="roundLine">ROUND 0/5</div>
     <div id="crosshair"></div>
+    <div id="scopeOverlay"><div id="scopeRing"></div><div id="scopeDot"></div></div>
     <div id="hitmarker"></div>
     <div id="bottomLeft">
       <div id="weaponName">RIFLE</div>
