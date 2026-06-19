@@ -45,6 +45,9 @@
       height: 100%; width: 100%; background: linear-gradient(90deg,#ff5d5d,#ff9d5d);
       transition: width .15s;
     }
+    #armorLine { font-size: 13px; color: #7fb8e0; margin-top: 4px; }
+    #armorLine span { color: #bfe3ff; font-weight: bold; }
+    #armorLine.hidden { display: none; }
 
     #weaponSwitchHint {
       position: absolute; left: 24px; bottom: 70px; font-size: 12px; color: #889;
@@ -155,6 +158,7 @@
     <div id="bottomRight">
       <div id="hpLine">HP <span id="hp">150</span>/150</div>
       <div id="healthbar"><div id="healthbarFill"></div></div>
+      <div id="armorLine" class="hidden">방어구 <span id="armor">0</span></div>
     </div>
     <div id="killfeedList"></div>
   </div>

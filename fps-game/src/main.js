@@ -20,6 +20,8 @@ const hud = {
   killfeed: document.getElementById('killfeedList'),
   round: document.getElementById('roundLine'),
   killBanner: document.getElementById('killBanner'),
+  armor: document.getElementById('armor'),
+  armorLine: document.getElementById('armorLine'),
 };
 
 // ----- renderer / scene / camera -----------------------------------
@@ -319,7 +321,16 @@ function spawnTarget(x, z) {
   const muzzleLight = new THREE.PointLight(0xffaa55, 0, 5, 2);
   muzzleLight.position.set(0.32, 1.25, -0.3);
 
-  group.add(body, vest, head, visor, gun, muzzleLight);
+  // separate lower-body hitbox: a slightly-forward box so low shots register
+  // as a leg hit (reduced damage) instead of always counting as a body hit
+  const leg = new THREE.Mesh(
+    new THREE.BoxGeometry(0.5, 0.7, 0.5),
+    new THREE.MeshStandardMaterial({ color: 0x232328, roughness: 0.7 })
+  );
+  leg.position.set(0, 0.35, 0.03);
+  leg.castShadow = true;
+
+  group.add(body, vest, head, visor, gun, muzzleLight, leg);
   group.position.set(x, 0, z);
 
   // floating health bar (kept as a separate top-level object so the
@@ -339,7 +350,7 @@ function spawnTarget(x, z) {
   scene.add(healthBar);
 
   group.userData = {
-    hp: 100, maxHp: 100, alive: true, body, head, gun, muzzleLight,
+    hp: 100, maxHp: 100, alive: true, body, head, gun, muzzleLight, leg,
     healthBar, barFill,
     baseY: 0, t: Math.random() * Math.PI * 2,
     attackCooldown: 1 + Math.random() * 1.5,
@@ -598,32 +609,39 @@ const WEAPONS = {
   rifle: {
     name: 'RIFLE', melee: false, auto: true,
     magSize: 12, ammo: 12, reserve: 48,
-    fireRate: 0.14, reloadTime: 1200, dmgBody: 34, dmgHead: 100,
+    fireRate: 0.14, reloadTime: 1200, dmgBody: 34, dmgHead: 100, dmgLeg: 22,
     recoil: 0.045, reloading: false,
     bloomGrowDeg: 0.45, maxSpreadDeg: 3.2,
+    // fixed up-then-side spray pattern (deg), CS/Valorant-style, applied in
+    // shot order instead of pure randomness while sustaining automatic fire
+    sprayPattern: [
+      [0, 0.3], [0, 0.6], [0, 0.9], [0.1, 1.2], [0.3, 1.4],
+      [0.6, 1.5], [1.0, 1.4], [1.4, 1.2], [1.7, 0.9], [1.9, 0.6],
+      [2.0, 0.3], [2.0, 0.1],
+    ],
   },
   pistol: {
     name: 'PISTOL', melee: false, auto: false,
     magSize: 8, ammo: 8, reserve: 32,
-    fireRate: 0.28, reloadTime: 900, dmgBody: 22, dmgHead: 70,
+    fireRate: 0.28, reloadTime: 900, dmgBody: 22, dmgHead: 70, dmgLeg: 14,
     recoil: 0.03, reloading: false,
   },
   knife: {
     name: 'KNIFE', melee: true, auto: false,
-    range: 2.4, fireRate: 0.45, dmgBody: 60, dmgHead: 60,
+    range: 2.4, fireRate: 0.45, dmgBody: 60, dmgHead: 60, dmgLeg: 60,
     recoil: 0, reloading: false,
   },
   shotgun: {
     name: 'SHOTGUN', melee: false, auto: false,
     magSize: 6, ammo: 6, reserve: 24,
-    fireRate: 0.7, reloadTime: 1800, dmgBody: 16, dmgHead: 26,
+    fireRate: 0.7, reloadTime: 1800, dmgBody: 16, dmgHead: 26, dmgLeg: 11,
     pellets: 8, spreadDeg: 5,
     recoil: 0.07, reloading: false,
   },
   sniper: {
     name: 'SNIPER', melee: false, auto: false,
     magSize: 4, ammo: 4, reserve: 12,
-    fireRate: 1.5, reloadTime: 2000, dmgBody: 80, dmgHead: 300,
+    fireRate: 1.5, reloadTime: 2000, dmgBody: 80, dmgHead: 300, dmgLeg: 50,
     recoil: 0.09, reloading: false,
   },
 };
@@ -658,6 +676,7 @@ function setWeapon(key) {
   fireCooldown = 0.15;
   kickTimer = 0;
   weaponBloom = 0;
+  weaponShotCount = 0;
   for (const k in weaponModels) weaponModels[k].visible = k === key;
   updateAmmoHud();
   if (key !== 'sniper') setZoom(false);
@@ -713,8 +732,35 @@ function toggleBuyMenu(force) {
 }
 
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyB') toggleBuyMenu();
+  if (e.code === 'KeyB' && !buyPhaseActive) toggleBuyMenu();
 });
+
+// ----- buy phase: countdown before each duel round, like Unity GameManager ---
+let buyPhaseActive = false;
+let buyPhaseTimer = 0;
+let buyPhaseCallback = null;
+const BUY_PHASE_SECONDS = 5;
+
+function startBuyPhase(callback) {
+  buyPhaseActive = true;
+  buyPhaseTimer = BUY_PHASE_SECONDS;
+  buyPhaseCallback = callback;
+  toggleBuyMenu(true);
+}
+
+function updateBuyPhase(dt) {
+  if (!buyPhaseActive) return;
+  buyPhaseTimer -= dt;
+  hud.round.textContent = `다음 라운드까지 ${Math.max(0, Math.ceil(buyPhaseTimer))}s`;
+  if (buyPhaseTimer <= 0) {
+    buyPhaseActive = false;
+    toggleBuyMenu(false);
+    updateRoundHud();
+    const cb = buyPhaseCallback;
+    buyPhaseCallback = null;
+    if (cb) cb();
+  }
+}
 
 for (const btn of buyButtons) {
   btn.addEventListener('click', (e) => {
@@ -765,6 +811,7 @@ let recoilYaw = 0;
 let kickTimer = 0;
 let kickBaseZ = 0;
 let weaponBloom = 0; // grows with sustained auto-fire, decays when not firing
+let weaponShotCount = 0; // resets when firing stops; drives sprayPattern index
 
 // V-key weapon inspect: a brief non-combat flourish, blocked while reloading
 const INSPECT_DURATION = 1.1;
@@ -776,7 +823,7 @@ document.addEventListener('keydown', (e) => {
 });
 
 const raycaster = new THREE.Raycaster();
-const shootables = () => targets.flatMap((t) => [t.userData.body, t.userData.head]);
+const shootables = () => targets.flatMap((t) => [t.userData.body, t.userData.head, t.userData.leg]);
 
 let mouseDown = false;
 document.addEventListener('mousedown', (e) => {
@@ -785,7 +832,7 @@ document.addEventListener('mousedown', (e) => {
     tryShoot();
   }
 });
-document.addEventListener('mouseup', (e) => { if (e.button === 0) mouseDown = false; });
+document.addEventListener('mouseup', (e) => { if (e.button === 0) { mouseDown = false; weaponShotCount = 0; } });
 document.addEventListener('keydown', (e) => { if (e.code === 'KeyR') reload(); });
 document.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -800,7 +847,10 @@ function tryShoot() {
     updateAmmoHud();
   }
   fireCooldown = w.fireRate;
-  if (w.auto) weaponBloom = Math.min(w.maxSpreadDeg || 0, weaponBloom + (w.bloomGrowDeg || 0));
+  if (w.auto) {
+    weaponBloom = Math.min(w.maxSpreadDeg || 0, weaponBloom + (w.bloomGrowDeg || 0));
+    weaponShotCount++;
+  }
   playShot();
 
   // visual recoil + camera kick
@@ -834,6 +884,13 @@ function tryShoot() {
       const spread = (w.spreadDeg * Math.PI / 180);
       ndcX = (Math.random() - 0.5) * spread;
       ndcY = (Math.random() - 0.5) * spread;
+    } else if (w.auto && w.sprayPattern && w.sprayPattern.length > 0) {
+      // fixed recoil-pattern climb (CS/Valorant-style) instead of pure
+      // randomness, indexed by how many shots have landed this burst
+      const idx = Math.min(weaponShotCount - 1, w.sprayPattern.length - 1);
+      const [yawDeg, pitchDeg] = w.sprayPattern[Math.max(0, idx)];
+      ndcX = yawDeg * Math.PI / 180;
+      ndcY = pitchDeg * Math.PI / 180;
     } else if (w.auto && weaponBloom > 0) {
       const spread = (weaponBloom * Math.PI / 180);
       ndcX = (Math.random() - 0.5) * spread;
@@ -846,12 +903,13 @@ function tryShoot() {
     const hits = raycaster.intersectObjects(colliders.concat(shootables()), false);
     if (hits.length > 0) {
       const hit = hits[0];
-      const target = targets.find((t) => t.userData.body === hit.object || t.userData.head === hit.object);
+      const target = targets.find((t) => t.userData.body === hit.object || t.userData.head === hit.object || t.userData.leg === hit.object);
       if (target && target.userData.alive) {
         anyHit = true;
         const headshot = hit.object === target.userData.head;
+        const legshot = hit.object === target.userData.leg;
         if (headshot) headshotAny = true;
-        const dmg = headshot ? w.dmgHead : w.dmgBody;
+        const dmg = headshot ? w.dmgHead : legshot ? (w.dmgLeg != null ? w.dmgLeg : w.dmgBody) : w.dmgBody;
         damageByTarget.set(target, (damageByTarget.get(target) || 0) + dmg);
       }
     }
@@ -926,9 +984,11 @@ function onDuelKill() {
   } else {
     setTimeout(() => {
       playerHp = PLAYER_MAX_HP;
+      playerArmor = 50;
       updateHealthHud();
+      updateArmorHud();
       refillAmmo();
-      spawnDuelOpponent();
+      startBuyPhase(spawnDuelOpponent);
     }, 1200);
   }
 }
@@ -987,6 +1047,8 @@ let headBobTime = 0;
 // ----- player health -------------------------------------------------------
 const PLAYER_MAX_HP = 150;
 let playerHp = PLAYER_MAX_HP;
+let playerArmor = 0;
+const ARMOR_DAMAGE_REDUCTION = 0.5;
 let gameOver = false;
 
 function updateHealthHud() {
@@ -995,9 +1057,23 @@ function updateHealthHud() {
 }
 updateHealthHud();
 
+function updateArmorHud() {
+  hud.armor.textContent = Math.max(0, Math.round(playerArmor));
+  hud.armorLine.classList.toggle('hidden', gameMode !== 'duel' || playerArmor <= 0);
+}
+updateArmorHud();
+
 function damagePlayer(amount) {
   if (gameOver) return;
-  playerHp = Math.max(0, playerHp - amount);
+  let final = amount;
+  if (playerArmor > 0) {
+    let absorbed = Math.round(amount * ARMOR_DAMAGE_REDUCTION * (playerArmor / 100));
+    absorbed = Math.min(absorbed, playerArmor);
+    final = Math.max(0, amount - absorbed);
+    playerArmor -= absorbed;
+    updateArmorHud();
+  }
+  playerHp = Math.max(0, playerHp - final);
   updateHealthHud();
   hud.flash.classList.add('show');
   setTimeout(() => hud.flash.classList.remove('show'), 120);
@@ -1015,11 +1091,13 @@ function killPlayer() {
     } else {
       setTimeout(() => {
         playerHp = PLAYER_MAX_HP;
+        playerArmor = 50;
         updateHealthHud();
+        updateArmorHud();
         yawObject.position.set(0, 1.7, 8);
         for (const target of targets.slice()) killTarget(target, false, true);
         refillAmmo();
-        spawnDuelOpponent();
+        startBuyPhase(spawnDuelOpponent);
       }, 1200);
     }
     return;
@@ -1056,11 +1134,15 @@ function startMatch() {
   if (gameMode === 'duel') {
     playerScore = 0;
     aiScore = 0;
+    playerArmor = 50;
+    updateArmorHud();
     updateRoundHud();
     spawnDuelOpponent();
   } else {
     roundScore = 0;
     roundTransition = false;
+    playerArmor = 0;
+    updateArmorHud();
     updateRoundHud();
     for (let i = 0; i < 4; i++) spawnRandomTarget();
   }
@@ -1343,6 +1425,7 @@ function animate() {
   updateRecoilRecovery(dt);
   updateTargets(dt, clock.elapsedTime);
   updateHazards(clock.elapsedTime);
+  updateBuyPhase(dt);
 
   renderer.render(scene, camera);
 }
