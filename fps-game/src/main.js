@@ -29,14 +29,18 @@ const hud = {
 };
 
 // ----- renderer / scene / camera -----------------------------------
-const renderer = new THREE.WebGLRenderer({ antialias: true });
+const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setSize(window.innerWidth, window.innerHeight);
+// cap at 2x — uncapped devicePixelRatio on some displays (3x+) tanks fill-rate
+// for no visible benefit, capping keeps text/edges sharp without the cost
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
 renderer.toneMappingExposure = 1.1;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
 document.body.appendChild(renderer.domElement);
+const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x2b3850);
@@ -58,7 +62,7 @@ scene.add(new THREE.AmbientLight(0xffffff, 0.28));
 const sun = new THREE.DirectionalLight(0xfff3d8, 2.6);
 sun.position.set(20, 30, 10);
 sun.castShadow = true;
-sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.mapSize.set(4096, 4096);
 sun.shadow.camera.left = -40;
 sun.shadow.camera.right = 40;
 sun.shadow.camera.top = 40;
@@ -67,12 +71,19 @@ sun.shadow.bias = -0.0006;
 sun.shadow.normalBias = 0.02;
 scene.add(sun);
 
+// soft cool rim light from the opposite side so shadow-facing surfaces
+// aren't a flat black — no shadow casting (purely fill, keeps the sun as
+// the only shadow source) so it's nearly free for a noticeable depth boost
+const fillLight = new THREE.DirectionalLight(0x8fb4ff, 0.45);
+fillLight.position.set(-18, 14, -16);
+scene.add(fillLight);
+
 // ----- level: ground + walls + cover boxes -----------------------------
 const colliders = []; // meshes used for AABB collision checks
 
 // procedural tiled texture: subtle per-tile noise/grout lines so flat
 // ground/wall surfaces aren't a single dead-flat color under the sun light
-function makeNoiseTexture(baseHex, { tile = 64, grid = 8, noise = 14 } = {}) {
+function makeNoiseTexture(baseHex, { tile = 256, grid = 8, noise = 14 } = {}) {
   const canvas = document.createElement('canvas');
   canvas.width = canvas.height = tile;
   const ctx2d = canvas.getContext('2d');
@@ -96,6 +107,34 @@ function makeNoiseTexture(baseHex, { tile = 64, grid = 8, noise = 14 } = {}) {
   const texture = new THREE.CanvasTexture(canvas);
   texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
   texture.colorSpace = THREE.SRGBColorSpace;
+  if (maxAnisotropy) texture.anisotropy = maxAnisotropy;
+  return texture;
+}
+
+// grayscale height-map companion to makeNoiseTexture's color map: same tile
+// grid (recessed grout lines) plus per-pixel noise, so lit surfaces show
+// actual micro-relief instead of a perfectly flat-shaded color texture
+function makeBumpTexture({ tile = 256, grid = 8, noise = 22 } = {}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = tile;
+  const ctx2d = canvas.getContext('2d');
+  ctx2d.fillStyle = 'rgb(128,128,128)';
+  ctx2d.fillRect(0, 0, tile, tile);
+  const imgData = ctx2d.getImageData(0, 0, tile, tile);
+  for (let i = 0; i < imgData.data.length; i += 4) {
+    const n = 128 + (Math.random() - 0.5) * noise;
+    imgData.data[i] = imgData.data[i + 1] = imgData.data[i + 2] = Math.max(0, Math.min(255, n));
+  }
+  ctx2d.putImageData(imgData, 0, 0);
+  ctx2d.strokeStyle = 'rgba(0,0,0,0.5)';
+  ctx2d.lineWidth = 2;
+  for (let i = 0; i <= tile; i += tile / grid) {
+    ctx2d.beginPath(); ctx2d.moveTo(i, 0); ctx2d.lineTo(i, tile); ctx2d.stroke();
+    ctx2d.beginPath(); ctx2d.moveTo(0, i); ctx2d.lineTo(tile, i); ctx2d.stroke();
+  }
+  const texture = new THREE.CanvasTexture(canvas);
+  texture.wrapS = texture.wrapT = THREE.RepeatWrapping;
+  if (maxAnisotropy) texture.anisotropy = maxAnisotropy;
   return texture;
 }
 
@@ -106,6 +145,10 @@ function makeBoxMesh(w, h, d, color, texRepeat) {
     tex.repeat.set(texRepeat[0], texRepeat[1]);
     material.map = tex;
     material.color.set(0xffffff);
+    const bump = makeBumpTexture();
+    bump.repeat.set(texRepeat[0], texRepeat[1]);
+    material.bumpMap = bump;
+    material.bumpScale = 0.04;
   }
   const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), material);
   mesh.castShadow = true;
@@ -230,12 +273,36 @@ function buildLevel(key) {
     scene.add(wall);
     addCollider(wall);
     levelMeshes.push(wall);
+
+    // dark baseboard trim where the wall meets the floor — grounds the
+    // boundary visually instead of color-matched wall/floor bleeding together
+    const trim = makeBoxMesh(w + 0.05, 0.25, d + 0.05, 0x14161a);
+    trim.position.set(x, 0.12, z);
+    scene.add(trim);
+    levelMeshes.push(trim);
+  }
+
+  // corner support pillars: tall accent beams at all four boundary corners
+  // give the arena a readable skyline silhouette instead of just flat walls
+  const pillarColor = new THREE.Color(cfg.wall).multiplyScalar(0.65).getHex();
+  const pillarHeight = wallHeight + 2.5;
+  for (const sx of [-1, 1]) {
+    for (const sz of [-1, 1]) {
+      const pillar = makeBoxMesh(1.4, pillarHeight, 1.4, pillarColor);
+      pillar.material.metalness = 0.35;
+      pillar.material.roughness = 0.5;
+      pillar.position.set(sx * (ARENA / 2 - 0.6), pillarHeight / 2, sz * (ARENA / 2 - 0.6));
+      scene.add(pillar);
+      addCollider(pillar);
+      levelMeshes.push(pillar);
+    }
   }
 
   for (const [x, z] of cfg.coverPositions) {
     const size = 1.6 + Math.random() * 1.2;
     const crate = makeBoxMesh(size, size, size, cfg.cover, [1, 1]);
     crate.position.set(x, size / 2, z);
+    crate.rotation.y = Math.random() * Math.PI * 2;
     scene.add(crate);
     addCollider(crate);
     levelMeshes.push(crate);
@@ -868,6 +935,8 @@ function setWeapon(key) {
   weaponBloom = 0;
   weaponShotCount = 0;
   inspectTimer = 0;
+  const slot = slotOf(key);
+  if (slot) lastEquippedInSlot[slot] = key;
   for (const k in weaponModels) weaponModels[k].visible = k === key;
   updateAmmoHud();
   if (!SNIPER_KEYS.includes(key)) setZoom(false);
@@ -885,13 +954,26 @@ const WEAPON_SLOTS = {
 // range mode (aim practice) keeps every weapon unlocked since there's no economy
 let ownedWeapons = new Set(['classic', 'knife']);
 
+function slotOf(key) {
+  for (const slotKey in WEAPON_SLOTS) {
+    if (WEAPON_SLOTS[slotKey].includes(key)) return slotKey;
+  }
+  return null;
+}
+const lastEquippedInSlot = { primary: null, secondary: null, melee: 'knife' };
+
 // Valorant has one equipped weapon per slot (no cycling among owned guns) —
-// 1/2/3 just re-equips whatever you currently own in that slot, chosen at
-// the buy menu
+// 1/2/3 re-equips whichever weapon you most recently had active in that
+// slot (falling back to the first owned weapon if you never equipped one
+// this life), instead of always jumping to a fixed-priority weapon — e.g.
+// owning both Phantom and Vandal shouldn't force Phantom every time you
+// press 1, and a purchased sidearm other than Classic must stay reachable
+// via 2 even though Classic is always owned.
 function pickSlot(slotKey) {
   const list = gameMode === 'duel' ? WEAPON_SLOTS[slotKey].filter((k) => ownedWeapons.has(k)) : WEAPON_SLOTS[slotKey];
   if (list.length === 0) return;
-  setWeapon(list[0]);
+  const preferred = lastEquippedInSlot[slotKey];
+  setWeapon(preferred && list.includes(preferred) ? preferred : list[0]);
 }
 
 document.addEventListener('keydown', (e) => {
