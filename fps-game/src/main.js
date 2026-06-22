@@ -407,6 +407,9 @@ function spawnDuelOpponent() {
 
 
 // ----- weapon viewmodels ---------------------------------------------------
+// Valorant has a unique mesh per gun; here every one of the 19 weapons gets
+// its own small procedural model built from boxes/cylinders, distinguished
+// by silhouette (barrel length, mag/drum shape, scope, stock) and material.
 function buildMuzzle(parent, pos) {
   const light = new THREE.PointLight(0xffcc66, 0, 6, 2);
   light.position.copy(pos);
@@ -420,141 +423,171 @@ function buildMuzzle(parent, pos) {
   return { light, sprite };
 }
 
-// rifle
-const weaponRifle = new THREE.Group();
-{
-  const gunBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.12, 0.14, 0.55),
-    new THREE.MeshStandardMaterial({ color: 0x1d1f22, roughness: 0.4, metalness: 0.6 })
-  );
-  const gunBarrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.025, 0.025, 0.3, 12),
-    new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.3, metalness: 0.8 })
-  );
-  gunBarrel.rotation.x = Math.PI / 2;
-  gunBarrel.position.set(0, 0.02, -0.45);
-  weaponRifle.add(gunBody, gunBarrel);
+function gunMat(color, roughness = 0.4, metalness = 0.6) {
+  return new THREE.MeshStandardMaterial({ color, roughness, metalness });
 }
-weaponRifle.position.set(0.28, -0.25, -0.55);
-camera.add(weaponRifle);
-const rifleMuzzle = buildMuzzle(weaponRifle, new THREE.Vector3(0, 0.02, -0.62));
-
-// pistol
-const weaponPistol = new THREE.Group();
-{
-  const gunBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.1, 0.16, 0.32),
-    new THREE.MeshStandardMaterial({ color: 0x2a2c30, roughness: 0.35, metalness: 0.65 })
-  );
-  const grip = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.18, 0.1),
-    new THREE.MeshStandardMaterial({ color: 0x16171a, roughness: 0.6 })
-  );
-  grip.position.set(0, -0.15, 0.08);
-  weaponPistol.add(gunBody, grip);
+function gunBox(w, h, d, mat, pos, rotX) {
+  const m = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), mat);
+  if (pos) m.position.copy(pos);
+  if (rotX) m.rotation.x = rotX;
+  return m;
 }
-weaponPistol.position.set(0.26, -0.22, -0.42);
-weaponPistol.visible = false;
-camera.add(weaponPistol);
-const pistolMuzzle = buildMuzzle(weaponPistol, new THREE.Vector3(0, 0.03, -0.18));
-
-// knife
-const weaponKnife = new THREE.Group();
-{
-  const blade = new THREE.Mesh(
-    new THREE.BoxGeometry(0.035, 0.32, 0.05),
-    new THREE.MeshStandardMaterial({ color: 0xcfd6dc, roughness: 0.25, metalness: 0.9 })
-  );
-  blade.position.set(0, 0.18, 0);
-  const handle = new THREE.Mesh(
-    new THREE.BoxGeometry(0.045, 0.14, 0.06),
-    new THREE.MeshStandardMaterial({ color: 0x3a2c20, roughness: 0.7 })
-  );
-  weaponKnife.add(blade, handle);
-  weaponKnife.rotation.x = -0.5;
+// cylinder barrel/scope, axis along z by default
+function gunCyl(rad, len, mat, pos, axis = 'z') {
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 12), mat);
+  if (axis === 'z') m.rotation.x = Math.PI / 2;
+  else if (axis === 'x') m.rotation.z = Math.PI / 2;
+  if (pos) m.position.copy(pos);
+  return m;
 }
-weaponKnife.position.set(0.24, -0.22, -0.4);
-weaponKnife.visible = false;
-camera.add(weaponKnife);
 
-// shotgun
-const weaponShotgun = new THREE.Group();
-{
-  const gunBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.14, 0.16, 0.42),
-    new THREE.MeshStandardMaterial({ color: 0x4a3a26, roughness: 0.55, metalness: 0.3 })
-  );
-  const gunBarrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.04, 0.04, 0.4, 12),
-    new THREE.MeshStandardMaterial({ color: 0x1a1a1c, roughness: 0.3, metalness: 0.8 })
-  );
-  gunBarrel.rotation.x = Math.PI / 2;
-  gunBarrel.position.set(0, 0.02, -0.4);
-  const pump = new THREE.Mesh(
-    new THREE.BoxGeometry(0.1, 0.08, 0.16),
-    new THREE.MeshStandardMaterial({ color: 0x2a2018, roughness: 0.6 })
-  );
-  pump.position.set(0, -0.04, -0.32);
-  weaponShotgun.add(gunBody, gunBarrel, pump);
-}
-weaponShotgun.position.set(0.28, -0.26, -0.5);
-weaponShotgun.visible = false;
-camera.add(weaponShotgun);
-const shotgunMuzzle = buildMuzzle(weaponShotgun, new THREE.Vector3(0, 0.02, -0.58));
-
-// sniper
-const weaponSniper = new THREE.Group();
-{
-  const gunBody = new THREE.Mesh(
-    new THREE.BoxGeometry(0.1, 0.12, 0.7),
-    new THREE.MeshStandardMaterial({ color: 0x23262a, roughness: 0.4, metalness: 0.6 })
-  );
-  const gunBarrel = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.02, 0.02, 0.4, 12),
-    new THREE.MeshStandardMaterial({ color: 0x111214, roughness: 0.3, metalness: 0.8 })
-  );
-  gunBarrel.rotation.x = Math.PI / 2;
-  gunBarrel.position.set(0, 0.02, -0.55);
-  const scope = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.025, 0.025, 0.2, 12),
-    new THREE.MeshStandardMaterial({ color: 0x0c0c0d, roughness: 0.2, metalness: 0.9 })
-  );
-  scope.rotation.x = Math.PI / 2;
-  scope.position.set(0, 0.09, -0.1);
-  weaponSniper.add(gunBody, gunBarrel, scope);
-}
-weaponSniper.position.set(0.3, -0.24, -0.65);
-weaponSniper.visible = false;
-camera.add(weaponSniper);
-const sniperMuzzle = buildMuzzle(weaponSniper, new THREE.Vector3(0, 0.02, -0.75));
-
-// Valorant has a unique mesh per gun; this prototype reuses one viewmodel per
-// weapon category (sidearm/SMG/shotgun/rifle/sniper/heavy/melee) and lets the
-// economy/stat layer (WEAPONS below) carry the per-gun identity instead
-const baseModels = { rifle: weaponRifle, pistol: weaponPistol, knife: weaponKnife, shotgun: weaponShotgun, sniper: weaponSniper };
-const baseMuzzles = { rifle: rifleMuzzle, pistol: pistolMuzzle, knife: null, shotgun: shotgunMuzzle, sniper: sniperMuzzle };
-const baseRestZ = {
-  rifle: weaponRifle.position.z, pistol: weaponPistol.position.z, knife: weaponKnife.position.z,
-  shotgun: weaponShotgun.position.z, sniper: weaponSniper.position.z,
-};
-const WEAPON_VISUAL = {
-  classic: 'pistol', shorty: 'pistol', frenzy: 'pistol', ghost: 'pistol', sheriff: 'pistol',
-  stinger: 'rifle', spectre: 'rifle',
-  bucky: 'shotgun', judge: 'shotgun',
-  bulldog: 'rifle', guardian: 'rifle', phantom: 'rifle', vandal: 'rifle',
-  marshal: 'sniper', outlaw: 'sniper', operator: 'sniper',
-  ares: 'rifle', odin: 'rifle',
-  knife: 'knife',
-};
 const weaponModels = {};
 const weaponMuzzles = {};
 const weaponRestZ = {};
-for (const key in WEAPON_VISUAL) {
-  const cat = WEAPON_VISUAL[key];
-  weaponModels[key] = baseModels[cat];
-  weaponMuzzles[key] = baseMuzzles[cat];
-  weaponRestZ[key] = baseRestZ[cat];
+function registerGun(key, parts, restPos, muzzlePos) {
+  const group = new THREE.Group();
+  for (const part of parts) group.add(part);
+  group.position.copy(restPos);
+  group.visible = false;
+  camera.add(group);
+  weaponModels[key] = group;
+  weaponRestZ[key] = restPos.z;
+  weaponMuzzles[key] = muzzlePos ? buildMuzzle(group, muzzlePos) : null;
 }
+const V3 = (x, y, z) => new THREE.Vector3(x, y, z);
+
+// ----- sidearms -----
+registerGun('classic', [
+  gunBox(0.1, 0.16, 0.32, gunMat(0x2a2c30, 0.35, 0.65)),
+  gunBox(0.08, 0.18, 0.1, gunMat(0x16171a, 0.6, 0.3), V3(0, -0.15, 0.08)),
+], V3(0.26, -0.22, -0.42), V3(0, 0.03, -0.18));
+
+registerGun('shorty', [
+  gunBox(0.13, 0.14, 0.2, gunMat(0x4a3a26, 0.55, 0.3)),
+  gunCyl(0.025, 0.18, gunMat(0x1a1a1c, 0.3, 0.8), V3(-0.03, 0.0, -0.18)),
+  gunCyl(0.025, 0.18, gunMat(0x1a1a1c, 0.3, 0.8), V3(0.03, 0.0, -0.18)),
+  gunBox(0.08, 0.16, 0.09, gunMat(0x2a2018, 0.6, 0.2), V3(0, -0.13, 0.05)),
+], V3(0.26, -0.22, -0.35), V3(0, 0.0, -0.27));
+
+registerGun('frenzy', [
+  gunBox(0.1, 0.15, 0.28, gunMat(0x33405a, 0.4, 0.6)),
+  gunBox(0.04, 0.12, 0.05, gunMat(0x1c2230, 0.5, 0.4), V3(0, -0.17, 0.02)),
+  gunBox(0.08, 0.16, 0.09, gunMat(0x20262e, 0.6, 0.3), V3(0, -0.15, 0.07)),
+], V3(0.26, -0.22, -0.4), V3(0, 0.03, -0.16));
+
+registerGun('ghost', [
+  gunBox(0.1, 0.15, 0.3, gunMat(0x2d3a30, 0.4, 0.5)),
+  gunCyl(0.022, 0.22, gunMat(0x1a1a1a, 0.3, 0.6), V3(0, 0.0, -0.28)),
+  gunBox(0.08, 0.17, 0.09, gunMat(0x16201a, 0.6, 0.3), V3(0, -0.15, 0.07)),
+], V3(0.26, -0.22, -0.46), V3(0, 0.02, -0.4));
+
+registerGun('sheriff', [
+  gunBox(0.1, 0.14, 0.22, gunMat(0xc9ccd0, 0.25, 0.85)),
+  gunCyl(0.06, 0.1, gunMat(0x9a9da2, 0.3, 0.8), V3(0, 0.0, -0.04), 'x'),
+  gunCyl(0.025, 0.22, gunMat(0x4a4d52, 0.3, 0.8), V3(0, 0.0, -0.18)),
+  gunBox(0.08, 0.18, 0.1, gunMat(0x5a4030, 0.6, 0.2), V3(0, -0.15, 0.06)),
+], V3(0.27, -0.22, -0.4), V3(0, 0.0, -0.3));
+
+// ----- SMGs -----
+registerGun('stinger', [
+  gunBox(0.11, 0.14, 0.4, gunMat(0x6b5d44, 0.5, 0.4)),
+  gunCyl(0.025, 0.2, gunMat(0x1a1a1c, 0.3, 0.8), V3(0, 0.02, -0.42)),
+  gunBox(0.05, 0.18, 0.07, gunMat(0x3a3226, 0.6, 0.3), V3(0, -0.17, -0.05)),
+], V3(0.27, -0.23, -0.45), V3(0, 0.02, -0.5));
+
+registerGun('spectre', [
+  gunBox(0.12, 0.15, 0.42, gunMat(0x2c2e32, 0.45, 0.55)),
+  gunCyl(0.028, 0.22, gunMat(0x141416, 0.3, 0.8), V3(0, 0.02, -0.44)),
+  gunBox(0.05, 0.2, 0.08, gunMat(0x1a1b1d, 0.6, 0.3), V3(0, -0.18, -0.04), 0.1),
+  gunBox(0.04, 0.06, 0.22, gunMat(0x1a1b1d, 0.6, 0.3), V3(0, 0.0, 0.28)),
+], V3(0.28, -0.23, -0.46), V3(0, 0.02, -0.53));
+
+// ----- shotguns -----
+registerGun('bucky', [
+  gunBox(0.15, 0.16, 0.36, gunMat(0x4a3a26, 0.55, 0.3)),
+  gunCyl(0.035, 0.34, gunMat(0x1a1a1c, 0.3, 0.8), V3(-0.035, 0.02, -0.34)),
+  gunCyl(0.035, 0.34, gunMat(0x1a1a1c, 0.3, 0.8), V3(0.035, 0.02, -0.34)),
+  gunBox(0.1, 0.08, 0.14, gunMat(0x2a2018, 0.6, 0.2), V3(0, -0.05, -0.2)),
+], V3(0.28, -0.26, -0.42), V3(0, 0.02, -0.5));
+
+registerGun('judge', [
+  gunBox(0.13, 0.15, 0.26, gunMat(0x2a2a2c, 0.4, 0.5)),
+  gunCyl(0.07, 0.11, gunMat(0x1f1f21, 0.3, 0.7), V3(0, 0.0, -0.02), 'x'),
+  gunCyl(0.04, 0.22, gunMat(0x161618, 0.3, 0.8), V3(0, 0.0, -0.2)),
+], V3(0.28, -0.25, -0.36), V3(0, 0.0, -0.28));
+
+// ----- rifles -----
+registerGun('bulldog', [
+  gunBox(0.12, 0.15, 0.5, gunMat(0x4b5240, 0.45, 0.45)),
+  gunCyl(0.025, 0.26, gunMat(0x111214, 0.3, 0.8), V3(0, 0.02, -0.42)),
+  gunBox(0.06, 0.22, 0.09, gunMat(0x2c2f24, 0.5, 0.3), V3(0, -0.19, -0.05), 0.15),
+  gunBox(0.06, 0.1, 0.16, gunMat(0x2c2f24, 0.5, 0.3), V3(0, 0.0, 0.32)),
+], V3(0.28, -0.25, -0.54), V3(0, 0.02, -0.62));
+
+registerGun('guardian', [
+  gunBox(0.11, 0.14, 0.6, gunMat(0x3a3d42, 0.4, 0.55)),
+  gunCyl(0.022, 0.36, gunMat(0x111214, 0.3, 0.8), V3(0, 0.02, -0.5)),
+  gunBox(0.05, 0.18, 0.08, gunMat(0x222428, 0.5, 0.3), V3(0, -0.17, -0.05)),
+  gunCyl(0.025, 0.16, gunMat(0x0c0c0d, 0.2, 0.9), V3(0, 0.09, -0.1)),
+], V3(0.29, -0.24, -0.62), V3(0, 0.02, -0.74));
+
+registerGun('phantom', [
+  gunBox(0.12, 0.15, 0.46, gunMat(0x23262e, 0.4, 0.6)),
+  gunCyl(0.03, 0.26, gunMat(0x15161a, 0.3, 0.7), V3(0, 0.02, -0.46)),
+  gunBox(0.055, 0.22, 0.085, gunMat(0x181a1e, 0.5, 0.3), V3(0, -0.19, -0.04), 0.15),
+], V3(0.28, -0.25, -0.5), V3(0, 0.02, -0.62));
+
+registerGun('vandal', [
+  gunBox(0.12, 0.15, 0.52, gunMat(0x2a2520, 0.45, 0.45)),
+  gunCyl(0.025, 0.3, gunMat(0xd4af50, 0.3, 0.9), V3(0, 0.02, -0.46)),
+  gunBox(0.06, 0.22, 0.09, gunMat(0x2a2520, 0.5, 0.3), V3(0, -0.19, -0.04), 0.15),
+], V3(0.28, -0.25, -0.56), V3(0, 0.02, -0.64));
+
+// ----- sniper rifles -----
+registerGun('marshal', [
+  gunBox(0.1, 0.13, 0.62, gunMat(0x4a3c2c, 0.5, 0.3)),
+  gunCyl(0.02, 0.36, gunMat(0x111214, 0.3, 0.8), V3(0, 0.02, -0.5)),
+  gunCyl(0.025, 0.18, gunMat(0x0c0c0d, 0.2, 0.9), V3(0, 0.09, -0.08)),
+], V3(0.3, -0.24, -0.6), V3(0, 0.02, -0.7));
+
+registerGun('outlaw', [
+  gunBox(0.11, 0.14, 0.58, gunMat(0x1f2024, 0.4, 0.55)),
+  gunCyl(0.022, 0.34, gunMat(0x111214, 0.3, 0.8), V3(0, 0.02, -0.46)),
+  gunBox(0.05, 0.14, 0.06, gunMat(0x15161a, 0.5, 0.3), V3(0, -0.15, -0.05)),
+  gunCyl(0.026, 0.2, gunMat(0x0c0c0d, 0.2, 0.9), V3(0, 0.095, -0.1)),
+], V3(0.3, -0.24, -0.58), V3(0, 0.02, -0.66));
+
+registerGun('operator', [
+  gunBox(0.1, 0.13, 0.78, gunMat(0x23262a, 0.4, 0.6)),
+  gunCyl(0.02, 0.46, gunMat(0x111214, 0.3, 0.8), V3(0, 0.02, -0.6)),
+  gunCyl(0.03, 0.26, gunMat(0x0c0c0d, 0.2, 0.9), V3(0, 0.1, -0.12)),
+  gunBox(0.02, 0.16, 0.02, gunMat(0x111214, 0.5, 0.5), V3(-0.05, -0.1, -0.5), 0.4),
+  gunBox(0.02, 0.16, 0.02, gunMat(0x111214, 0.5, 0.5), V3(0.05, -0.1, -0.5), -0.4),
+], V3(0.3, -0.22, -0.7), V3(0, 0.02, -0.84));
+
+// ----- heavy -----
+registerGun('ares', [
+  gunBox(0.13, 0.16, 0.5, gunMat(0x3c4632, 0.5, 0.4)),
+  gunCyl(0.03, 0.3, gunMat(0x111214, 0.3, 0.8), V3(0, 0.02, -0.42)),
+  gunCyl(0.09, 0.07, gunMat(0x20261a, 0.5, 0.3), V3(0, -0.2, -0.02), 'x'),
+], V3(0.29, -0.26, -0.54), V3(0, 0.02, -0.62));
+
+registerGun('odin', [
+  gunBox(0.15, 0.18, 0.64, gunMat(0x2a2c28, 0.5, 0.4)),
+  gunCyl(0.035, 0.4, gunMat(0x111214, 0.3, 0.8), V3(0, 0.02, -0.54)),
+  gunCyl(0.12, 0.09, gunMat(0x16180f, 0.5, 0.3), V3(0, -0.24, -0.04), 'x'),
+  gunBox(0.02, 0.16, 0.02, gunMat(0x111214, 0.5, 0.5), V3(-0.06, -0.12, -0.42), 0.4),
+  gunBox(0.02, 0.16, 0.02, gunMat(0x111214, 0.5, 0.5), V3(0.06, -0.12, -0.42), -0.4),
+], V3(0.3, -0.27, -0.66), V3(0, 0.02, -0.78));
+
+// ----- melee -----
+registerGun('knife', [
+  gunBox(0.035, 0.32, 0.05, gunMat(0xcfd6dc, 0.25, 0.9), V3(0, 0.18, 0)),
+  gunBox(0.045, 0.14, 0.06, gunMat(0x3a2c20, 0.7, 0.1)),
+], V3(0.24, -0.22, -0.4), null);
+weaponModels.knife.rotation.x = -0.5;
+
+weaponModels.vandal.visible = true; // matches the default currentWeaponKey below
 const SNIPER_KEYS = ['marshal', 'outlaw', 'operator'];
 
 // ----- input / pointer lock --------------------------------------------
@@ -807,8 +840,7 @@ function setWeapon(key) {
   kickTimer = 0;
   weaponBloom = 0;
   weaponShotCount = 0;
-  const activeCategory = WEAPON_VISUAL[key];
-  for (const cat in baseModels) baseModels[cat].visible = cat === activeCategory;
+  for (const k in weaponModels) weaponModels[k].visible = k === key;
   updateAmmoHud();
   if (!SNIPER_KEYS.includes(key)) setZoom(false);
 }
@@ -821,6 +853,7 @@ const WEAPON_SLOTS = {
   melee: ['knife'],
 };
 let primaryIndex = 0;
+let secondaryIndex = 0;
 // duel mode gates weapons behind the buy menu like Valorant's economy: you
 // only start owning the classic pistol + knife and must buy everything else.
 // range mode (aim practice) keeps every weapon unlocked since there's no economy
@@ -833,6 +866,10 @@ function pickSlot(slotKey) {
     if (list.includes(currentWeaponKey)) primaryIndex = (primaryIndex + 1) % list.length;
     else primaryIndex = 0;
     setWeapon(list[primaryIndex]);
+  } else if (slotKey === 'secondary') {
+    if (list.includes(currentWeaponKey)) secondaryIndex = (secondaryIndex + 1) % list.length;
+    else secondaryIndex = 0;
+    setWeapon(list[secondaryIndex]);
   } else {
     setWeapon(list[0]);
   }
@@ -1464,8 +1501,8 @@ function updateRecoilRecovery(dt) {
     activeWeapon.rotation.x = 0;
   }
 
-  for (const key in baseMuzzles) {
-    const muzzle = baseMuzzles[key];
+  for (const key in weaponMuzzles) {
+    const muzzle = weaponMuzzles[key];
     if (!muzzle) continue;
     muzzle.light.intensity *= Math.max(0, 1 - dt * 18);
     muzzle.sprite.material.opacity *= Math.max(0, 1 - dt * 18);
