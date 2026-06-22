@@ -867,6 +867,7 @@ function setWeapon(key) {
   kickTimer = 0;
   weaponBloom = 0;
   weaponShotCount = 0;
+  inspectTimer = 0;
   for (const k in weaponModels) weaponModels[k].visible = k === key;
   updateAmmoHud();
   if (!SNIPER_KEYS.includes(key)) setZoom(false);
@@ -974,6 +975,7 @@ function updateBuyPhase(dt) {
 for (const btn of buyButtons) {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
+    if (gameMode !== 'duel') return;
     const weaponKey = btn.dataset.weapon;
     const armorKey = btn.dataset.armor;
     if (weaponKey) {
@@ -987,6 +989,7 @@ for (const btn of buyButtons) {
       refreshBuyMenu();
     } else if (armorKey) {
       const tier = ARMOR_TIERS[armorKey];
+      if (tier.value <= playerArmor) return;
       if (tier.cost > playerCredits) return;
       playerCredits -= tier.cost;
       playerArmor = tier.value;
@@ -1103,7 +1106,7 @@ function tryShoot() {
   const shotCount = w.pellets || 1;
   let anyHit = false;
   const damageByTarget = new Map();
-  let headshotAny = false;
+  const headshotByTarget = new Map();
   for (let i = 0; i < shotCount; i++) {
     let ndcX = 0, ndcY = 0;
     // every gun has some inherent hip-fire inaccuracy on top of its
@@ -1141,7 +1144,7 @@ function tryShoot() {
         anyHit = true;
         const headshot = hit.object === target.userData.head;
         const legshot = hit.object === target.userData.leg;
-        if (headshot) headshotAny = true;
+        if (headshot) headshotByTarget.set(target, true);
         const dmg = headshot ? w.dmgHead : legshot ? (w.dmgLeg != null ? w.dmgLeg : w.dmgBody) : w.dmgBody;
         damageByTarget.set(target, (damageByTarget.get(target) || 0) + dmg);
       }
@@ -1156,7 +1159,7 @@ function tryShoot() {
     for (const [target, dmg] of damageByTarget) {
       target.userData.hp -= dmg;
       updateTargetHealthBar(target);
-      if (target.userData.hp <= 0) killTarget(target, headshotAny);
+      if (target.userData.hp <= 0) killTarget(target, headshotByTarget.get(target) || false);
     }
   }
 }
@@ -1310,7 +1313,7 @@ function damagePlayer(amount) {
   if (gameOver) return;
   let final = amount;
   if (playerArmor > 0) {
-    let absorbed = Math.round(amount * ARMOR_DAMAGE_REDUCTION * (playerArmor / 100));
+    let absorbed = Math.round(amount * ARMOR_DAMAGE_REDUCTION);
     absorbed = Math.min(absorbed, playerArmor);
     final = Math.max(0, amount - absorbed);
     playerArmor -= absorbed;
