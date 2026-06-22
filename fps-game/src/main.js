@@ -26,6 +26,7 @@ const hud = {
   credits: document.getElementById('credits'),
   creditsLine: document.getElementById('creditsLine'),
   buyCredits: document.getElementById('buyCredits'),
+  ability: document.getElementById('abilityLine'),
 };
 
 // ----- renderer / scene / camera -----------------------------------
@@ -245,6 +246,7 @@ function clearLevel() {
   levelMeshes = [];
   colliders.length = 0;
   currentHazards = [];
+  clearAbilityEffects();
 }
 
 function buildLevel(key) {
@@ -472,6 +474,214 @@ function spawnDuelOpponent() {
   updateTargetHealthBar(ai);
 }
 
+// ----- agent abilities ------------------------------------------------------
+// a Valorant-style "agent" pick: one ability per agent, bound to a single key
+// (E), separate from the weapon system entirely — picking an agent never
+// changes your guns, it only changes what E does
+const AGENTS = {
+  fire: { name: '블레이즈', color: 0xff6a2b, cooldown: 8, desc: '화염벽 — 전방에 화염 장벽을 세워 닿는 적을 태운다' },
+  ice: { name: '프로스트', color: 0x6ad8ff, cooldown: 10, desc: '얼음벽 — 전방에 단단한 얼음 장벽을 세워 시야와 이동을 막는다' },
+  electric: { name: '볼트', color: 0xfff066, cooldown: 7, desc: '전기 충격 — 전방 범위에 즉발 전기 피해를 입힌다' },
+  teleport: { name: '노바', color: 0xb673ff, cooldown: 6, desc: '순간이동 — 보고 있는 방향으로 짧게 블링크한다' },
+};
+let currentAgent = 'fire';
+let abilityCooldown = 0;
+const abilityEffects = [];
+
+function forwardDir() {
+  return new THREE.Vector3(0, 0, -1).applyAxisAngle(new THREE.Vector3(0, 1, 0), yaw);
+}
+
+function damageTarget(target, amount) {
+  if (!target.userData.alive) return;
+  target.userData.hp -= amount;
+  updateTargetHealthBar(target);
+  if (target.userData.hp <= 0) killTarget(target, false);
+}
+
+function spawnWallEffect(type, color, durationSec, blocks) {
+  const fwd = forwardDir();
+  const cx = yawObject.position.x + fwd.x * 4;
+  const cz = yawObject.position.z + fwd.z * 4;
+  const angle = Math.atan2(fwd.x, fwd.z);
+  const width = 6, depth = 0.4, height = 2.6;
+  const mesh = new THREE.Mesh(
+    new THREE.BoxGeometry(width, height, depth),
+    new THREE.MeshStandardMaterial({
+      color, emissive: color, emissiveIntensity: type === 'fire' ? 1.4 : 0.6,
+      transparent: true, opacity: type === 'fire' ? 0.85 : 0.55, roughness: 0.4,
+    })
+  );
+  mesh.position.set(cx, height / 2, cz);
+  mesh.rotation.y = angle;
+  scene.add(mesh);
+  const light = new THREE.PointLight(color, 2.2, 9, 2);
+  light.position.set(cx, height / 2, cz);
+  scene.add(light);
+
+  const effect = {
+    type, mesh, light, life: durationSec, maxLife: durationSec,
+    x: cx, z: cz, angle, halfWidth: width / 2, halfDepth: depth / 2 + 0.6,
+    tickTimer: 0, collider: null,
+  };
+  if (blocks) {
+    addCollider(mesh);
+    effect.collider = mesh;
+  }
+  abilityEffects.push(effect);
+}
+
+function withinWallFootprint(effect, x, z) {
+  const dx = x - effect.x, dz = z - effect.z;
+  const cosA = Math.cos(effect.angle), sinA = Math.sin(effect.angle);
+  const lx = dx * cosA - dz * sinA;
+  const lz = dx * sinA + dz * cosA;
+  return Math.abs(lx) < effect.halfWidth && Math.abs(lz) < effect.halfDepth;
+}
+
+function spawnBurstEffect(color) {
+  const fwd = forwardDir();
+  const cx = yawObject.position.x + fwd.x * 5;
+  const cz = yawObject.position.z + fwd.z * 5;
+  const radius = 5;
+  const mesh = new THREE.Mesh(
+    new THREE.SphereGeometry(0.6, 16, 16),
+    new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.8 })
+  );
+  mesh.position.set(cx, 1.2, cz);
+  scene.add(mesh);
+  const light = new THREE.PointLight(color, 4, 14, 2);
+  light.position.set(cx, 1.2, cz);
+  scene.add(light);
+  abilityEffects.push({ type: 'burstFx', mesh, light, life: 0.4, maxLife: 0.4 });
+
+  for (const target of targets) {
+    if (!target.userData.alive) continue;
+    const dx = target.position.x - cx, dz = target.position.z - cz;
+    if (Math.hypot(dx, dz) <= radius) damageTarget(target, 40);
+  }
+}
+
+function spawnBlinkEffect(color, x0, z0, x1, z1) {
+  for (const [x, z] of [[x0, z0], [x1, z1]]) {
+    const mesh = new THREE.Mesh(
+      new THREE.RingGeometry(0.3, 0.7, 24),
+      new THREE.MeshBasicMaterial({ color, transparent: true, opacity: 0.9, side: THREE.DoubleSide })
+    );
+    mesh.position.set(x, 1.0, z);
+    mesh.rotation.x = -Math.PI / 2;
+    scene.add(mesh);
+    abilityEffects.push({ type: 'burstFx', mesh, light: null, life: 0.35, maxLife: 0.35 });
+  }
+}
+
+function useAbility() {
+  if (!locked || gameOver || abilityCooldown > 0) return;
+  const agent = AGENTS[currentAgent];
+  abilityCooldown = agent.cooldown;
+
+  if (currentAgent === 'fire') {
+    spawnWallEffect('fire', agent.color, 4, false);
+  } else if (currentAgent === 'ice') {
+    spawnWallEffect('ice', agent.color, 6, true);
+  } else if (currentAgent === 'electric') {
+    spawnBurstEffect(agent.color);
+  } else if (currentAgent === 'teleport') {
+    const fwd = forwardDir();
+    const maxDist = 8;
+    const step = 0.25;
+    const x0 = yawObject.position.x, z0 = yawObject.position.z;
+    // walk outward from the player (not inward from maxDist) so a thin wall
+    // close to the start can't be skipped over by checking only the far endpoint
+    let dist = 0;
+    for (let d = step; d <= maxDist; d += step) {
+      if (collidesAt(x0 + fwd.x * d, z0 + fwd.z * d)) break;
+      dist = d;
+    }
+    const x1 = x0 + fwd.x * dist, z1 = z0 + fwd.z * dist;
+    spawnBlinkEffect(agent.color, x0, z0, x1, z1);
+    yawObject.position.x = x1;
+    yawObject.position.z = z1;
+  }
+  updateAbilityHud();
+}
+
+function updateAbilityEffects(dt) {
+  for (let i = abilityEffects.length - 1; i >= 0; i--) {
+    const fx = abilityEffects[i];
+    fx.life -= dt;
+
+    if (fx.type === 'fire' || fx.type === 'ice') {
+      const t = Math.max(0, fx.life / fx.maxLife);
+      fx.mesh.material.opacity = (fx.type === 'fire' ? 0.85 : 0.55) * Math.min(1, t * 2);
+      if (fx.light) fx.light.intensity = 2.2 * t;
+      if (fx.type === 'fire') {
+        fx.tickTimer -= dt;
+        if (fx.tickTimer <= 0) {
+          fx.tickTimer = 0.5;
+          for (const target of targets) {
+            if (target.userData.alive && withinWallFootprint(fx, target.position.x, target.position.z)) {
+              damageTarget(target, 10);
+            }
+          }
+        }
+      }
+    } else if (fx.type === 'burstFx') {
+      const t = Math.max(0, fx.life / fx.maxLife);
+      fx.mesh.scale.setScalar(1 + (1 - t) * 3);
+      fx.mesh.material.opacity = 0.9 * t;
+      if (fx.light) fx.light.intensity = 4 * t;
+    }
+
+    if (fx.life <= 0) {
+      scene.remove(fx.mesh);
+      if (fx.light) scene.remove(fx.light);
+      if (fx.collider) {
+        const idx = colliders.indexOf(fx.collider);
+        if (idx !== -1) colliders.splice(idx, 1);
+      }
+      abilityEffects.splice(i, 1);
+    }
+  }
+}
+
+function clearAbilityEffects() {
+  for (const fx of abilityEffects) {
+    scene.remove(fx.mesh);
+    if (fx.light) scene.remove(fx.light);
+    if (fx.collider) {
+      const idx = colliders.indexOf(fx.collider);
+      if (idx !== -1) colliders.splice(idx, 1);
+    }
+  }
+  abilityEffects.length = 0;
+}
+
+function updateAbilityHud() {
+  const agent = AGENTS[currentAgent];
+  hud.ability.textContent = abilityCooldown > 0
+    ? `E 능력 [${agent.name}] 재사용 ${abilityCooldown.toFixed(1)}s`
+    : `E 능력 [${agent.name}] 준비됨`;
+}
+
+function selectAgent(key) {
+  if (!AGENTS[key]) return;
+  currentAgent = key;
+  for (const btn of agentButtons) btn.classList.toggle('active', btn.dataset.agent === key);
+  updateAbilityHud();
+}
+
+document.addEventListener('keydown', (e) => { if (e.code === 'KeyE') useAbility(); });
+
+const agentButtons = document.querySelectorAll('.agentBtn');
+for (const btn of agentButtons) {
+  btn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    selectAgent(btn.dataset.agent);
+  });
+}
+for (const btn of agentButtons) btn.classList.toggle('active', btn.dataset.agent === currentAgent);
+updateAbilityHud();
 
 // ----- weapon viewmodels ---------------------------------------------------
 // Valorant has a unique mesh per gun; here every one of the 19 weapons gets
@@ -1308,6 +1518,8 @@ function onDuelKill() {
       updateHealthHud();
       updateArmorHud();
       refillAmmo();
+      abilityCooldown = 0;
+      updateAbilityHud();
       startBuyPhase(spawnDuelOpponent);
     }, 1200);
   }
@@ -1433,6 +1645,8 @@ function killPlayer() {
         currentWeaponKey = 'knife';
         setWeapon('classic');
         refillAmmo();
+        abilityCooldown = 0;
+        updateAbilityHud();
         startBuyPhase(spawnDuelOpponent);
       }, 1200);
     }
@@ -1467,6 +1681,9 @@ function refillAmmo() {
 function startMatch() {
   for (const target of targets.slice()) killTarget(target, false, true);
   refillAmmo();
+  abilityCooldown = 0;
+  clearAbilityEffects();
+  updateAbilityHud();
   if (gameMode === 'duel') {
     playerScore = 0;
     aiScore = 0;
@@ -1762,12 +1979,17 @@ function animate() {
     updateMovement(dt);
     if (mouseDown && currentWeapon().auto) tryShoot();
     if (fireCooldown > 0) fireCooldown -= dt;
+    if (abilityCooldown > 0) {
+      abilityCooldown = Math.max(0, abilityCooldown - dt);
+      updateAbilityHud();
+    }
     updateTargetAI(dt);
   }
   updateRecoilRecovery(dt);
   updateTargets(dt, clock.elapsedTime);
   updateHazards(clock.elapsedTime);
   updateBuyPhase(dt);
+  updateAbilityEffects(dt);
 
   renderer.render(scene, camera);
 }

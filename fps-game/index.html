@@ -75,7 +75,7 @@
     #creditsLine.hidden { display: none; }
 
     #weaponSwitchHint {
-      position: absolute; left: 24px; bottom: 70px; font-size: 12px; color: #889;
+      position: absolute; left: 24px; bottom: 96px; font-size: 12px; color: #889;
     }
 
     #hitmarker {
@@ -121,13 +121,15 @@
 
     #modeSelect { display: flex; gap: 10px; margin-top: 14px; cursor: default; }
     #mapSelect { display: flex; gap: 10px; margin-top: 10px; cursor: default; }
-    .mapBtn, .modeBtn {
+    #agentSelect { display: flex; gap: 10px; margin-top: 10px; cursor: default; }
+    .mapBtn, .modeBtn, .agentBtn {
       padding: 8px 16px; font-family: inherit; font-size: 13px; letter-spacing: 1px;
       color: #cdd; background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.25);
       border-radius: 4px; cursor: pointer;
     }
-    .mapBtn:hover, .modeBtn:hover { background: rgba(255,255,255,.16); }
-    .mapBtn.active, .modeBtn.active { background: #9be86b; color: #14210a; border-color: #9be86b; font-weight: bold; }
+    .mapBtn:hover, .modeBtn:hover, .agentBtn:hover { background: rgba(255,255,255,.16); }
+    .mapBtn.active, .modeBtn.active, .agentBtn.active { background: #9be86b; color: #14210a; border-color: #9be86b; font-weight: bold; }
+    #abilityLine { font-size: 13px; color: #d7b8ff; margin-top: 4px; }
 
     #buyMenu {
       position: fixed; inset: 0; background: rgba(0,0,0,.88); z-index: 20;
@@ -162,7 +164,7 @@
   <div id="blocker">
     <h1 id="blockerTitle">1FPS</h1>
     <p id="blockerSub">클릭해서 게임 시작 (마우스 잠금)</p>
-    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1 주무기(순환) · 2 보조무기 · 3 근접무기 · B 무기 변경 · 스나이퍼 우클릭 줌 · V 무기 살펴보기</p>
+    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1 주무기 · 2 보조무기 · 3 근접무기 · E 능력 · B 무기 변경 · 스나이퍼 우클릭 줌 · V 무기 살펴보기</p>
     <div id="modeSelect">
       <button class="modeBtn" data-mode="range">사격장</button>
       <button class="modeBtn" data-mode="duel">1대1 AI 대결</button>
@@ -175,6 +177,12 @@
       <button class="mapBtn" data-map="backrooms">백룸</button>
       <button class="mapBtn" data-map="onyx">오닉스</button>
     </div>
+    <div id="agentSelect">
+      <button class="agentBtn" data-agent="fire">블레이즈 (화염)</button>
+      <button class="agentBtn" data-agent="ice">프로스트 (얼음)</button>
+      <button class="agentBtn" data-agent="electric">볼트 (전기)</button>
+      <button class="agentBtn" data-agent="teleport">노바 (이동)</button>
+    </div>
   </div>
 
   <div id="hud">
@@ -186,8 +194,9 @@
     <div id="bottomLeft">
       <div id="weaponName">RIFLE</div>
       <div id="ammoLine">AMMO <span id="ammo">12</span>/<span id="reserve">48</span></div>
+      <div id="abilityLine">E 능력 [블레이즈] 준비됨</div>
     </div>
-    <div id="weaponSwitchHint">1 주무기(순환) · 2 사이드암(순환) · 3 근접무기 · B 구매창</div>
+    <div id="weaponSwitchHint">1 주무기 · 2 사이드암 · 3 근접무기 · E 능력 · B 구매창</div>
     <div id="bottomRight">
       <div id="hpLine">HP <span id="hp">150</span>/150</div>
       <div id="healthbar"><div id="healthbarFill"></div></div>
