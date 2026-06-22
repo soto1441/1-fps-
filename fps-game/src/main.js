@@ -852,27 +852,18 @@ const WEAPON_SLOTS = {
   secondary: ['classic', 'shorty', 'frenzy', 'ghost', 'sheriff'],
   melee: ['knife'],
 };
-let primaryIndex = 0;
-let secondaryIndex = 0;
 // duel mode gates weapons behind the buy menu like Valorant's economy: you
 // only start owning the classic pistol + knife and must buy everything else.
 // range mode (aim practice) keeps every weapon unlocked since there's no economy
 let ownedWeapons = new Set(['classic', 'knife']);
 
+// Valorant has one equipped weapon per slot (no cycling among owned guns) —
+// 1/2/3 just re-equips whatever you currently own in that slot, chosen at
+// the buy menu
 function pickSlot(slotKey) {
   const list = gameMode === 'duel' ? WEAPON_SLOTS[slotKey].filter((k) => ownedWeapons.has(k)) : WEAPON_SLOTS[slotKey];
   if (list.length === 0) return;
-  if (slotKey === 'primary') {
-    if (list.includes(currentWeaponKey)) primaryIndex = (primaryIndex + 1) % list.length;
-    else primaryIndex = 0;
-    setWeapon(list[primaryIndex]);
-  } else if (slotKey === 'secondary') {
-    if (list.includes(currentWeaponKey)) secondaryIndex = (secondaryIndex + 1) % list.length;
-    else secondaryIndex = 0;
-    setWeapon(list[secondaryIndex]);
-  } else {
-    setWeapon(list[0]);
-  }
+  setWeapon(list[0]);
 }
 
 document.addEventListener('keydown', (e) => {
@@ -965,8 +956,6 @@ for (const btn of buyButtons) {
       playerCredits -= cost;
       ownedWeapons.add(weaponKey);
       setWeapon(weaponKey);
-      const idx = WEAPON_SLOTS.primary.indexOf(weaponKey);
-      if (idx !== -1) primaryIndex = idx;
       updateCreditsHud();
       refreshBuyMenu();
     } else if (armorKey) {
@@ -1361,7 +1350,6 @@ function startMatch() {
     ownedWeapons = new Set(['classic', 'knife']);
     currentWeaponKey = 'knife'; // force setWeapon below to actually switch
     setWeapon('classic');
-    primaryIndex = 0;
     updateArmorHud();
     updateCreditsHud();
     updateRoundHud();
