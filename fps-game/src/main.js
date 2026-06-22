@@ -1307,6 +1307,12 @@ function killPlayer() {
         updateArmorHud();
         yawObject.position.set(0, 1.7, 8);
         for (const target of targets.slice()) killTarget(target, false, true);
+        // dying loses your loadout for the round, like Valorant — fall back
+        // to classic + knife and force a rebuy, unlike surviving a round
+        // (handled in onDuelKill) which keeps your gun
+        ownedWeapons = new Set(['classic', 'knife']);
+        currentWeaponKey = 'knife';
+        setWeapon('classic');
         refillAmmo();
         startBuyPhase(spawnDuelOpponent);
       }, 1200);
