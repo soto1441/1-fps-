@@ -673,6 +673,10 @@ const RIFLE_SPRAY = [
   [2.0, 0.3], [2.0, 0.1],
 ];
 
+// moveSpeedMult scales base walk/sprint speed (heavier guns slow you down,
+// like Valorant's hip-fire-vs-weight tradeoff); baseSpreadDeg is the
+// inherent hip-fire bullet-spread cone applied to every shot regardless of
+// auto-bloom/spray-pattern/pellet spread, so even single-fire guns differ
 const WEAPONS = {
   // ----- sidearms -----
   classic: {
@@ -680,6 +684,7 @@ const WEAPONS = {
     magSize: 12, ammo: 12, reserve: 36,
     fireRate: 0.2, reloadTime: 1300, dmgBody: 18, dmgHead: 55, dmgLeg: 12,
     recoil: 0.02, reloading: false, cost: 0,
+    moveSpeedMult: 1.0, baseSpreadDeg: 0.15,
   },
   shorty: {
     name: 'SHORTY', melee: false, auto: false,
@@ -687,24 +692,28 @@ const WEAPONS = {
     fireRate: 0.6, reloadTime: 1600, dmgBody: 10, dmgHead: 18, dmgLeg: 7,
     pellets: 5, spreadDeg: 7,
     recoil: 0.05, reloading: false, cost: 200,
+    moveSpeedMult: 0.98, baseSpreadDeg: 0.3,
   },
   frenzy: {
     name: 'FRENZY', melee: false, auto: true,
     magSize: 13, ammo: 13, reserve: 39,
     fireRate: 0.1, reloadTime: 1300, dmgBody: 16, dmgHead: 45, dmgLeg: 10,
     recoil: 0.04, reloading: false, cost: 450,
+    moveSpeedMult: 1.0, baseSpreadDeg: 0.5,
   },
   ghost: {
     name: 'GHOST', melee: false, auto: false,
     magSize: 15, ammo: 15, reserve: 30,
     fireRate: 0.18, reloadTime: 1300, dmgBody: 20, dmgHead: 78, dmgLeg: 13,
     recoil: 0.025, reloading: false, cost: 500,
+    moveSpeedMult: 1.0, baseSpreadDeg: 0.1,
   },
   sheriff: {
     name: 'SHERIFF', melee: false, auto: false,
     magSize: 6, ammo: 6, reserve: 12,
     fireRate: 0.35, reloadTime: 1600, dmgBody: 28, dmgHead: 100, dmgLeg: 18,
     recoil: 0.05, reloading: false, cost: 800,
+    moveSpeedMult: 0.97, baseSpreadDeg: 0.2,
   },
   // ----- SMGs -----
   stinger: {
@@ -712,12 +721,16 @@ const WEAPONS = {
     magSize: 20, ammo: 20, reserve: 60,
     fireRate: 0.08, reloadTime: 1500, dmgBody: 18, dmgHead: 50, dmgLeg: 12,
     recoil: 0.035, reloading: false, cost: 1000,
+    moveSpeedMult: 0.96, baseSpreadDeg: 0.6,
+    bloomGrowDeg: 0.35, maxSpreadDeg: 2.6,
   },
   spectre: {
     name: 'SPECTRE', melee: false, auto: true,
     magSize: 22, ammo: 22, reserve: 66,
     fireRate: 0.09, reloadTime: 1700, dmgBody: 20, dmgHead: 58, dmgLeg: 13,
     recoil: 0.03, reloading: false, cost: 1600,
+    moveSpeedMult: 0.94, baseSpreadDeg: 0.45,
+    bloomGrowDeg: 0.3, maxSpreadDeg: 2.3,
   },
   // ----- shotguns -----
   bucky: {
@@ -726,6 +739,7 @@ const WEAPONS = {
     fireRate: 0.8, reloadTime: 2000, dmgBody: 12, dmgHead: 20, dmgLeg: 9,
     pellets: 10, spreadDeg: 7,
     recoil: 0.08, reloading: false, cost: 850,
+    moveSpeedMult: 0.9, baseSpreadDeg: 0.3,
   },
   judge: {
     name: 'JUDGE', melee: false, auto: false,
@@ -733,6 +747,7 @@ const WEAPONS = {
     fireRate: 0.55, reloadTime: 2000, dmgBody: 11, dmgHead: 18, dmgLeg: 8,
     pellets: 9, spreadDeg: 6,
     recoil: 0.07, reloading: false, cost: 1850,
+    moveSpeedMult: 0.92, baseSpreadDeg: 0.35,
   },
   // ----- rifles -----
   bulldog: {
@@ -740,12 +755,14 @@ const WEAPONS = {
     magSize: 24, ammo: 24, reserve: 72,
     fireRate: 0.15, reloadTime: 1500, dmgBody: 26, dmgHead: 78, dmgLeg: 17,
     recoil: 0.035, reloading: false, cost: 2050,
+    moveSpeedMult: 0.9, baseSpreadDeg: 0.25,
   },
   guardian: {
     name: 'GUARDIAN', melee: false, auto: false,
     magSize: 12, ammo: 12, reserve: 36,
     fireRate: 0.25, reloadTime: 1700, dmgBody: 36, dmgHead: 130, dmgLeg: 24,
     recoil: 0.03, reloading: false, cost: 2250,
+    moveSpeedMult: 0.88, baseSpreadDeg: 0.1,
   },
   phantom: {
     name: 'PHANTOM', melee: false, auto: true,
@@ -754,6 +771,7 @@ const WEAPONS = {
     recoil: 0.04, reloading: false, cost: 2900,
     bloomGrowDeg: 0.45, maxSpreadDeg: 3.2,
     sprayPattern: RIFLE_SPRAY,
+    moveSpeedMult: 0.87, baseSpreadDeg: 0.15,
   },
   vandal: {
     name: 'VANDAL', melee: false, auto: true,
@@ -762,6 +780,7 @@ const WEAPONS = {
     recoil: 0.045, reloading: false, cost: 2900,
     bloomGrowDeg: 0.45, maxSpreadDeg: 3.2,
     sprayPattern: RIFLE_SPRAY,
+    moveSpeedMult: 0.87, baseSpreadDeg: 0.18,
   },
   // ----- sniper rifles -----
   marshal: {
@@ -769,18 +788,21 @@ const WEAPONS = {
     magSize: 5, ammo: 5, reserve: 15,
     fireRate: 1.1, reloadTime: 1800, dmgBody: 60, dmgHead: 200, dmgLeg: 40,
     recoil: 0.07, reloading: false, cost: 1100,
+    moveSpeedMult: 0.85, baseSpreadDeg: 0.03,
   },
   outlaw: {
     name: 'OUTLAW', melee: false, auto: false,
     magSize: 2, ammo: 2, reserve: 6,
     fireRate: 1.3, reloadTime: 2200, dmgBody: 70, dmgHead: 240, dmgLeg: 45,
     recoil: 0.08, reloading: false, cost: 2400,
+    moveSpeedMult: 0.83, baseSpreadDeg: 0.05,
   },
   operator: {
     name: 'OPERATOR', melee: false, auto: false,
     magSize: 4, ammo: 4, reserve: 12,
     fireRate: 1.5, reloadTime: 2000, dmgBody: 80, dmgHead: 300, dmgLeg: 50,
     recoil: 0.09, reloading: false, cost: 4700,
+    moveSpeedMult: 0.8, baseSpreadDeg: 0.02,
   },
   // ----- heavy -----
   ares: {
@@ -788,18 +810,23 @@ const WEAPONS = {
     magSize: 40, ammo: 40, reserve: 80,
     fireRate: 0.1, reloadTime: 2500, dmgBody: 22, dmgHead: 65, dmgLeg: 15,
     recoil: 0.05, reloading: false, cost: 1600,
+    moveSpeedMult: 0.78, baseSpreadDeg: 0.5,
+    bloomGrowDeg: 0.3, maxSpreadDeg: 3.0,
   },
   odin: {
     name: 'ODIN', melee: false, auto: true,
     magSize: 60, ammo: 60, reserve: 120,
     fireRate: 0.08, reloadTime: 3000, dmgBody: 24, dmgHead: 70, dmgLeg: 16,
     recoil: 0.055, reloading: false, cost: 3200,
+    moveSpeedMult: 0.72, baseSpreadDeg: 0.7,
+    bloomGrowDeg: 0.35, maxSpreadDeg: 3.6,
   },
   // ----- melee -----
   knife: {
     name: 'KNIFE', melee: true, auto: false,
     range: 2.4, fireRate: 0.45, dmgBody: 60, dmgHead: 60, dmgLeg: 60,
     recoil: 0, reloading: false, cost: 0,
+    moveSpeedMult: 1.05, baseSpreadDeg: 0,
   },
 };
 
@@ -1079,21 +1106,28 @@ function tryShoot() {
   let headshotAny = false;
   for (let i = 0; i < shotCount; i++) {
     let ndcX = 0, ndcY = 0;
+    // every gun has some inherent hip-fire inaccuracy on top of its
+    // pellet-cone/spray-pattern/bloom mechanics, scaled per weapon
+    const base = (w.baseSpreadDeg || 0) * Math.PI / 180;
+    if (base > 0) {
+      ndcX += (Math.random() - 0.5) * base;
+      ndcY += (Math.random() - 0.5) * base;
+    }
     if (w.pellets) {
       const spread = (w.spreadDeg * Math.PI / 180);
-      ndcX = (Math.random() - 0.5) * spread;
-      ndcY = (Math.random() - 0.5) * spread;
+      ndcX += (Math.random() - 0.5) * spread;
+      ndcY += (Math.random() - 0.5) * spread;
     } else if (w.auto && w.sprayPattern && w.sprayPattern.length > 0) {
       // fixed recoil-pattern climb (CS/Valorant-style) instead of pure
       // randomness, indexed by how many shots have landed this burst
       const idx = Math.min(weaponShotCount - 1, w.sprayPattern.length - 1);
       const [yawDeg, pitchDeg] = w.sprayPattern[Math.max(0, idx)];
-      ndcX = yawDeg * Math.PI / 180;
-      ndcY = pitchDeg * Math.PI / 180;
+      ndcX += yawDeg * Math.PI / 180;
+      ndcY += pitchDeg * Math.PI / 180;
     } else if (w.auto && weaponBloom > 0) {
       const spread = (weaponBloom * Math.PI / 180);
-      ndcX = (Math.random() - 0.5) * spread;
-      ndcY = (Math.random() - 0.5) * spread;
+      ndcX += (Math.random() - 0.5) * spread;
+      ndcY += (Math.random() - 0.5) * spread;
     }
     raycaster.setFromCamera(new THREE.Vector2(ndcX, ndcY), camera);
     raycaster.far = range;
@@ -1423,7 +1457,7 @@ function updateMovement(dt) {
   const forward = (keys['KeyW'] ? 1 : 0) - (keys['KeyS'] ? 1 : 0);
   const strafe = (keys['KeyD'] ? 1 : 0) - (keys['KeyA'] ? 1 : 0);
   const sprinting = keys['ShiftLeft'] || keys['ShiftRight'];
-  const speed = sprinting ? 7.5 : 4.6;
+  const speed = (sprinting ? 7.5 : 4.6) * (currentWeapon().moveSpeedMult ?? 1);
 
   const dir = new THREE.Vector3(strafe, 0, -forward);
   const moving = dir.lengthSq() > 0;
