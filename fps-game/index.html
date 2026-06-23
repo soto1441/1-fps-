@@ -157,6 +157,24 @@
     #buyCreditsLine { font-size: 14px; color: #ffce5c; margin-bottom: 14px; letter-spacing: 1px; }
     #buyCreditsLine span { color: #ffe39a; font-weight: bold; }
     .buyCost { display: block; font-size: 11px; color: #ffce5c; margin-top: 2px; }
+    #scoreboard {
+      position: fixed; inset: 0; background: rgba(0,0,0,.82); z-index: 25;
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      color: #eee; pointer-events: none;
+    }
+    #scoreboard.hidden { display: none; }
+    #scoreTitle { font-size: 18px; letter-spacing: 1px; margin-bottom: 14px; color: #fff; }
+    .scoreCols { display: flex; gap: 24px; }
+    .scoreCol {
+      background: rgba(255,255,255,.05); border: 1px solid rgba(255,255,255,.2);
+      border-radius: 6px; padding: 10px 14px; min-width: 240px;
+    }
+    .scoreCol h3 { font-size: 12px; color: #9be86b; margin: 0 0 8px; letter-spacing: 1px; }
+    .scoreRow {
+      display: flex; gap: 14px; font-size: 13px; padding: 4px 0;
+      border-bottom: 1px solid rgba(255,255,255,.08); justify-content: space-between;
+    }
+    .scoreRow span:first-child { color: #fff; font-weight: bold; min-width: 70px; }
     .buyBtn.unaffordable { opacity: .4; cursor: not-allowed; }
   </style>
 </head>
@@ -164,10 +182,11 @@
   <div id="blocker">
     <h1 id="blockerTitle">1FPS</h1>
     <p id="blockerSub">클릭해서 게임 시작 (마우스 잠금)</p>
-    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1 주무기 · 2 보조무기 · 3 근접무기 · E 능력 · B 무기 변경 · 스나이퍼 우클릭 줌 · V 무기 살펴보기</p>
+    <p>WASD 이동 · Shift 스프린트 · Space 점프 · 좌클릭 공격 · R 재장전 · 1 주무기 · 2 보조무기 · 3 근접무기 · E 능력 · B 구매창 · Tab 스코어보드 · 스나이퍼 우클릭 줌 · V 무기 살펴보기</p>
     <div id="modeSelect">
       <button class="modeBtn" data-mode="range">사격장</button>
-      <button class="modeBtn" data-mode="duel">1대1 AI 대결</button>
+      <button class="modeBtn" data-mode="duel">1대1 경쟁전</button>
+      <button class="modeBtn" data-mode="squad">5vs5 섬멸전</button>
     </div>
     <div id="mapSelect">
       <button class="mapBtn" data-map="urban">도심 폐허</button>
@@ -257,6 +276,21 @@
       </div>
     </div>
     <p class="buyHint">B 키로 닫기</p>
+  </div>
+
+  <div id="scoreboard" class="hidden">
+    <h2 id="scoreTitle">ROUND 1 · YOU 0 - 0 ENEMY</h2>
+    <div class="scoreCols">
+      <div class="scoreCol">
+        <h3>아군</h3>
+        <div class="scoreRow"><span>YOU</span><span id="sbKD">0K / 0D</span><span id="sbCredits">800 CR</span><span id="sbWeapon">CLASSIC</span></div>
+      </div>
+      <div class="scoreCol">
+        <h3>적군</h3>
+        <div id="sbEnemyList"></div>
+      </div>
+    </div>
+    <p class="buyHint">Tab 키를 떼면 닫힙니다</p>
   </div>
 
   <script type="importmap">

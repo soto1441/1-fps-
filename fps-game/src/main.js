@@ -1112,10 +1112,21 @@ const STARTING_CREDITS = 800;
 const KILL_REWARD = 200;
 const ROUND_WIN_REWARD = 3000;
 const ROUND_LOSS_REWARD = 1900;
+const ROUND_LOSS_STEP = 500; // +500 per consecutive loss, capped at 3 losses in a row
+const CREDIT_CAP = 9000;
+const ROUNDS_PER_HALF = 12; // sides swap after round 12; round 13 starts the second half
+const ROUNDS_TO_WIN_MATCH = 13; // first to 13 round wins takes the match
+const MAX_REGULAR_ROUNDS = 24; // round 25 is a single overtime round if still tied 12-12
+const OVERTIME_CREDITS = 5000;
+const BUY_PHASE_SECONDS = 30;
+const PISTOL_BUY_PHASE_SECONDS = 45; // round 1 / round 13 (and the overtime round) get extra time
+const ROUND_PREP_SECONDS = 7; // pause after the round is decided, before the next buy phase
 
 let gameMode = 'range';
-// 사격장(range)은 에임 연습이라 무한탄, 1대1 대결(duel)은 진짜 탄약/재장전이 의미 있게 작동
+// 사격장(range)은 에임 연습이라 무한탄, 1대1 경쟁전(duel)/5vs5 섬멸전(squad)은
+// 둘 다 같은 라운드제 크레딧 경제를 쓰는 "매치" 모드라 진짜 탄약/재장전이 의미 있게 작동
 function infiniteAmmo() { return gameMode === 'range'; }
+function isMatchMode() { return gameMode === 'duel' || gameMode === 'squad'; }
 const WEAPON_DEFAULTS = JSON.parse(JSON.stringify(WEAPONS));
 
 let currentWeaponKey = 'vandal';
@@ -1180,7 +1191,7 @@ const lastEquippedInSlot = { primary: null, secondary: null, melee: 'knife' };
 // press 1, and a purchased sidearm other than Classic must stay reachable
 // via 2 even though Classic is always owned.
 function pickSlot(slotKey) {
-  const list = gameMode === 'duel' ? WEAPON_SLOTS[slotKey].filter((k) => ownedWeapons.has(k)) : WEAPON_SLOTS[slotKey];
+  const list = isMatchMode() ? WEAPON_SLOTS[slotKey].filter((k) => ownedWeapons.has(k)) : WEAPON_SLOTS[slotKey];
   if (list.length === 0) return;
   const preferred = lastEquippedInSlot[slotKey];
   setWeapon(preferred && list.includes(preferred) ? preferred : list[0]);
@@ -1241,11 +1252,10 @@ document.addEventListener('keydown', (e) => {
 let buyPhaseActive = false;
 let buyPhaseTimer = 0;
 let buyPhaseCallback = null;
-const BUY_PHASE_SECONDS = 5;
 
-function startBuyPhase(callback) {
+function startBuyPhase(callback, seconds) {
   buyPhaseActive = true;
-  buyPhaseTimer = BUY_PHASE_SECONDS;
+  buyPhaseTimer = seconds || BUY_PHASE_SECONDS;
   buyPhaseCallback = callback;
   toggleBuyMenu(true);
 }
@@ -1267,7 +1277,7 @@ function updateBuyPhase(dt) {
 for (const btn of buyButtons) {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (gameMode !== 'duel') return;
+    if (!isMatchMode()) return;
     const weaponKey = btn.dataset.weapon;
     const armorKey = btn.dataset.armor;
     if (weaponKey) {
@@ -1463,27 +1473,105 @@ function killTarget(target, headshot, silent) {
   targets.splice(targets.indexOf(target), 1);
   if (!silent) {
     addKillFeed(headshot ? '헤드샷 ✕' : '제거 ✕');
-    if (gameMode === 'duel') onDuelKill();
-    else checkWaveClear();
+    if (isMatchMode()) {
+      playerKills++;
+      playerCredits = Math.min(CREDIT_CAP, playerCredits + KILL_REWARD);
+      updateCreditsHud();
+      checkRoundEnd();
+    } else {
+      checkWaveClear();
+    }
   }
 }
 
-// ----- game modes: 사격장(range) clears waves of weak dummies for points,
-// 1대1 AI 대결(duel) is a single tougher bot fought best-of-5, both modeled
-// after RIVALS/Valorant-style match scoring (first to N round wins) -------
-const ROUNDS_TO_WIN = 5;
+// ----- game modes: 사격장(range) clears waves of weak dummies for points.
+// 1대1 경쟁전(duel)과 5vs5 섬멸전(squad)은 같은 발로란트식 라운드/크레딧 경제를
+// 공유한다 — 25라운드(전/후반 12라운드씩), 13승 선취 시 매치 승리, 12라운드
+// 종료 후 진영/크레딧 초기화, 24라운드까지도 12-12면 단판 연장. duel은 적이
+// 1명, squad는 적이 5명이며 둘 다 "적 전멸 = 라운드 승리"로 판정한다 -------
+const ROUNDS_TO_WIN = 5; // 사격장(range) wave-clear target, unrelated to match modes
 let roundScore = 0;
 let roundTransition = false;
 
-const DUEL_ROUNDS_TO_WIN = 5;
-let playerScore = 0;
-let aiScore = 0;
+let roundNumber = 1;
+let teamScore = 0;
+let enemyScore = 0;
+let lossStreak = 0;
+let isSecondHalf = false;
+let inOvertime = false;
+let matchTransition = false;
+let playerKills = 0;
+let playerDeaths = 0;
+// the enemy team's credits aren't simulated per-bot — mirrored symmetrically
+// from the same win/loss rewards the player would get, so the scoreboard can
+// show a plausible "적 팀 보유 크레딧" without modeling 5 separate AI wallets
+let enemyCredits = STARTING_CREDITS;
+
+function isPistolRound(n) {
+  return n === 1 || n === ROUNDS_PER_HALF + 1 || n > MAX_REGULAR_ROUNDS;
+}
 
 function updateRoundHud() {
-  hud.round.textContent = gameMode === 'duel'
-    ? `YOU ${playerScore} - ${aiScore} AI`
-    : `ROUND ${roundScore}/${ROUNDS_TO_WIN}`;
+  if (isMatchMode()) {
+    hud.round.textContent = inOvertime
+      ? `연장 라운드 · YOU ${teamScore} - ${enemyScore} ENEMY`
+      : `R${roundNumber} · YOU ${teamScore} - ${enemyScore} ENEMY`;
+  } else {
+    hud.round.textContent = `ROUND ${roundScore}/${ROUNDS_TO_WIN}`;
+  }
 }
+
+// ----- Tab scoreboard: KDA, credits, weapon — 적 팀 크레딧은 라운드 시작
+// 시점에 갱신된 enemyCredits 값을 그대로 보여준다(실제 명세처럼 라운드 중
+// 적 구매 내역까지는 추적하지 않음) -------------------------------------
+const scoreboardEl = document.getElementById('scoreboard');
+const scoreTitleEl = document.getElementById('scoreTitle');
+const sbKDEl = document.getElementById('sbKD');
+const sbCreditsEl = document.getElementById('sbCredits');
+const sbWeaponEl = document.getElementById('sbWeapon');
+const sbEnemyListEl = document.getElementById('sbEnemyList');
+let scoreboardOpen = false;
+
+function updateScoreboard() {
+  if (!isMatchMode()) {
+    scoreTitleEl.textContent = `사격장 · 클리어 ${roundScore}/${ROUNDS_TO_WIN}`;
+  } else {
+    scoreTitleEl.textContent = inOvertime
+      ? `연장 라운드 · YOU ${teamScore} - ${enemyScore} ENEMY`
+      : `R${roundNumber} · YOU ${teamScore} - ${enemyScore} ENEMY`;
+  }
+  sbKDEl.textContent = `${playerKills}K / ${playerDeaths}D`;
+  sbCreditsEl.textContent = `${playerCredits} CR`;
+  sbWeaponEl.textContent = currentWeapon().name;
+
+  sbEnemyListEl.innerHTML = '';
+  const aliveCount = targets.filter((t) => t.userData.isDuelist).length;
+  const totalCount = gameMode === 'squad' ? 5 : 1;
+  for (let i = 0; i < totalCount; i++) {
+    const row = document.createElement('div');
+    row.className = 'scoreRow';
+    const alive = i < aliveCount;
+    row.innerHTML = `<span>적 ${i + 1}</span><span>${alive ? '생존' : '사망'}</span><span>${enemyCredits} CR</span>`;
+    sbEnemyListEl.appendChild(row);
+  }
+}
+
+document.addEventListener('keydown', (e) => {
+  if (e.code === 'Tab') {
+    e.preventDefault();
+    if (!scoreboardOpen) {
+      scoreboardOpen = true;
+      scoreboardEl.classList.remove('hidden');
+      updateScoreboard();
+    }
+  }
+});
+document.addEventListener('keyup', (e) => {
+  if (e.code === 'Tab') {
+    scoreboardOpen = false;
+    scoreboardEl.classList.add('hidden');
+  }
+});
 
 function checkWaveClear() {
   if (roundTransition || gameOver || targets.length > 0) return;
@@ -1501,28 +1589,81 @@ function checkWaveClear() {
   }
 }
 
-function onDuelKill() {
-  if (gameOver) return;
-  playerScore++;
-  updateRoundHud();
-  addKillFeed(`AI 제거! ${playerScore}-${aiScore}`);
-  showKillBanner('YOU', 'AI');
-  playerCredits += ROUND_WIN_REWARD;
-  updateCreditsHud();
-  if (playerScore >= DUEL_ROUNDS_TO_WIN) {
-    setTimeout(winGame, 600);
+// spawn the right number of enemies for a fresh match-mode round
+function spawnRoundOpponents() {
+  const count = gameMode === 'squad' ? 5 : 1;
+  for (let i = 0; i < count; i++) spawnDuelOpponent();
+}
+
+function checkRoundEnd() {
+  if (matchTransition || gameOver || targets.length > 0) return;
+  awardRoundResult('player');
+}
+
+function awardRoundResult(winner) {
+  if (matchTransition || gameOver) return;
+  matchTransition = true;
+  if (winner === 'player') {
+    teamScore++;
+    lossStreak = 0;
+    playerCredits = Math.min(CREDIT_CAP, playerCredits + ROUND_WIN_REWARD);
+    enemyCredits = Math.min(CREDIT_CAP, enemyCredits + ROUND_LOSS_REWARD);
+    addKillFeed(`라운드 승리! ${teamScore}-${enemyScore}`);
+    showKillBanner('YOU', 'ENEMY');
   } else {
-    setTimeout(() => {
-      playerHp = PLAYER_MAX_HP;
-      playerArmor = 0;
-      updateHealthHud();
-      updateArmorHud();
-      refillAmmo();
-      abilityCooldown = 0;
-      updateAbilityHud();
-      startBuyPhase(spawnDuelOpponent);
-    }, 1200);
+    enemyScore++;
+    playerDeaths++;
+    lossStreak = Math.min(lossStreak + 1, 3);
+    playerCredits = Math.min(CREDIT_CAP, playerCredits + ROUND_LOSS_REWARD + (lossStreak - 1) * ROUND_LOSS_STEP);
+    enemyCredits = Math.min(CREDIT_CAP, enemyCredits + ROUND_WIN_REWARD);
+    addKillFeed(`라운드 패배... ${teamScore}-${enemyScore}`);
+    showKillBanner('ENEMY', 'YOU');
   }
+  updateCreditsHud();
+  updateRoundHud();
+
+  if (teamScore >= ROUNDS_TO_WIN_MATCH) { setTimeout(winGame, 600); return; }
+  if (enemyScore >= ROUNDS_TO_WIN_MATCH) { setTimeout(loseDuel, 600); return; }
+  if (inOvertime) {
+    // overtime is sudden-death — any decisive round result ends the match
+    setTimeout(teamScore > enemyScore ? winGame : loseDuel, 600);
+    return;
+  }
+
+  setTimeout(startNextRound, ROUND_PREP_SECONDS * 1000);
+}
+
+function startNextRound() {
+  if (gameOver) return;
+  matchTransition = false;
+  roundNumber++;
+
+  if (roundNumber > MAX_REGULAR_ROUNDS && teamScore === enemyScore) {
+    inOvertime = true;
+  }
+  const pistol = isPistolRound(roundNumber);
+  // 12라운드/24라운드(전·후반 마지막 라운드) 종료 후, 그리고 연장 라운드 진입
+  // 시에는 진영이 바뀐 것처럼 무기 소지 효력이 사라져 다시 사야 한다
+  if (pistol) {
+    if (roundNumber === ROUNDS_PER_HALF + 1) isSecondHalf = true;
+    playerCredits = inOvertime ? OVERTIME_CREDITS : STARTING_CREDITS;
+    enemyCredits = playerCredits;
+    lossStreak = 0;
+    ownedWeapons = new Set(['classic', 'knife']);
+    currentWeaponKey = 'knife';
+    setWeapon('classic');
+  }
+
+  playerHp = PLAYER_MAX_HP;
+  playerArmor = 0;
+  updateHealthHud();
+  updateArmorHud();
+  updateCreditsHud();
+  refillAmmo();
+  abilityCooldown = 0;
+  updateAbilityHud();
+  updateRoundHud();
+  startBuyPhase(spawnRoundOpponents, pistol ? PISTOL_BUY_PHASE_SECONDS : BUY_PHASE_SECONDS);
 }
 
 function winGame() {
@@ -1530,8 +1671,8 @@ function winGame() {
   mouseDown = false;
   document.exitPointerLock();
   blockerTitle.textContent = 'VICTORY';
-  blockerSub.textContent = gameMode === 'duel'
-    ? `AI와의 1대1에서 ${DUEL_ROUNDS_TO_WIN}승 달성! 클릭해서 다시 시작`
+  blockerSub.textContent = isMatchMode()
+    ? `${teamScore}승으로 매치 승리! (${teamScore}-${enemyScore}) 클릭해서 다시 시작`
     : `${ROUNDS_TO_WIN}라운드 클리어! 클릭해서 다시 시작`;
   blocker.classList.remove('hidden');
 }
@@ -1591,7 +1732,7 @@ updateHealthHud();
 
 function updateArmorHud() {
   hud.armor.textContent = Math.max(0, Math.round(playerArmor));
-  hud.armorLine.classList.toggle('hidden', gameMode !== 'duel');
+  hud.armorLine.classList.toggle('hidden', !isMatchMode());
 }
 updateArmorHud();
 
@@ -1599,7 +1740,7 @@ let playerCredits = STARTING_CREDITS;
 function updateCreditsHud() {
   hud.credits.textContent = playerCredits;
   hud.buyCredits.textContent = playerCredits;
-  hud.creditsLine.classList.toggle('hidden', gameMode !== 'duel');
+  hud.creditsLine.classList.toggle('hidden', !isMatchMode());
 }
 updateCreditsHud();
 
@@ -1621,35 +1762,13 @@ function damagePlayer(amount) {
 }
 
 function killPlayer() {
-  if (gameMode === 'duel') {
-    aiScore++;
-    updateRoundHud();
-    addKillFeed(`사망! ${playerScore}-${aiScore}`);
-    showKillBanner('AI', 'YOU');
-    playerCredits += ROUND_LOSS_REWARD;
-    updateCreditsHud();
-    if (aiScore >= DUEL_ROUNDS_TO_WIN) {
-      loseDuel();
-    } else {
-      setTimeout(() => {
-        playerHp = PLAYER_MAX_HP;
-        playerArmor = 0;
-        updateHealthHud();
-        updateArmorHud();
-        yawObject.position.set(0, 1.7, 8);
-        for (const target of targets.slice()) killTarget(target, false, true);
-        // dying loses your loadout for the round, like Valorant — fall back
-        // to classic + knife and force a rebuy, unlike surviving a round
-        // (handled in onDuelKill) which keeps your gun
-        ownedWeapons = new Set(['classic', 'knife']);
-        currentWeaponKey = 'knife';
-        setWeapon('classic');
-        refillAmmo();
-        abilityCooldown = 0;
-        updateAbilityHud();
-        startBuyPhase(spawnDuelOpponent);
-      }, 1200);
-    }
+  if (isMatchMode()) {
+    // no simulated teammates yet, so the player going down counts as the
+    // whole team being wiped — matches the "적 팀 전멸" win condition in
+    // reverse, since the player is the only combatant on their side
+    yawObject.position.set(0, 1.7, 8);
+    for (const target of targets.slice()) killTarget(target, false, true);
+    awardRoundResult('enemy');
     return;
   }
   gameOver = true;
@@ -1665,7 +1784,7 @@ function loseDuel() {
   mouseDown = false;
   document.exitPointerLock();
   blockerTitle.textContent = 'DEFEAT';
-  blockerSub.textContent = `AI ${DUEL_ROUNDS_TO_WIN}승! 클릭해서 다시 시작`;
+  blockerSub.textContent = `${enemyScore}승으로 매치 패배... (${teamScore}-${enemyScore}) 클릭해서 다시 시작`;
   blocker.classList.remove('hidden');
 }
 
@@ -1684,18 +1803,26 @@ function startMatch() {
   abilityCooldown = 0;
   clearAbilityEffects();
   updateAbilityHud();
-  if (gameMode === 'duel') {
-    playerScore = 0;
-    aiScore = 0;
+  if (isMatchMode()) {
+    roundNumber = 1;
+    teamScore = 0;
+    enemyScore = 0;
+    lossStreak = 0;
+    isSecondHalf = false;
+    inOvertime = false;
+    matchTransition = false;
+    playerKills = 0;
+    playerDeaths = 0;
     playerArmor = 0;
     playerCredits = STARTING_CREDITS;
+    enemyCredits = STARTING_CREDITS;
     ownedWeapons = new Set(['classic', 'knife']);
     currentWeaponKey = 'knife'; // force setWeapon below to actually switch
     setWeapon('classic');
     updateArmorHud();
     updateCreditsHud();
     updateRoundHud();
-    spawnDuelOpponent();
+    spawnRoundOpponents();
   } else {
     roundScore = 0;
     roundTransition = false;
@@ -1891,7 +2018,7 @@ function updateTargetAI(dt) {
   // only the 1대1 AI 대결(duel) opponent fights, and now actually maneuvers:
   // closes distance when out of range/sight, strafes side-to-side while
   // trading shots, and breaks off to create space when low on hp
-  if (gameMode !== 'duel') return;
+  if (!isMatchMode()) return;
   const playerPos = new THREE.Vector3();
   camera.getWorldPosition(playerPos);
 
@@ -1990,6 +2117,7 @@ function animate() {
   updateHazards(clock.elapsedTime);
   updateBuyPhase(dt);
   updateAbilityEffects(dt);
+  if (scoreboardOpen) updateScoreboard();
 
   renderer.render(scene, camera);
 }
