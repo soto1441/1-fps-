@@ -12,15 +12,10 @@
       text-shadow: 0 0 4px #000;
     }
     #crosshair {
-      position: absolute; top: 50%; left: 50%; width: 22px; height: 22px;
-      transform: translate(-50%, -50%);
+      position: absolute; top: 50%; left: 50%; width: 5px; height: 5px;
+      transform: translate(-50%, -50%); border-radius: 50%;
+      background: #d6ffb0; box-shadow: 0 0 3px rgba(0,0,0,.8);
     }
-    #crosshair::before, #crosshair::after {
-      content: ''; position: absolute; background: #d6ffb0;
-      box-shadow: 0 0 3px rgba(0,0,0,.8);
-    }
-    #crosshair::before { left: 50%; top: 0; width: 2px; height: 100%; margin-left: -1px; }
-    #crosshair::after  { top: 50%; left: 0; height: 2px; width: 100%; margin-top: -1px; }
     #crosshair.shoot { filter: brightness(2.2); }
     #crosshair.zoomed { display: none; }
 
