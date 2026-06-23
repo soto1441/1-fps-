@@ -1292,7 +1292,7 @@ function toggleBuyMenu(force) {
 }
 
 document.addEventListener('keydown', (e) => {
-  if (e.code === 'KeyB' && !buyPhaseActive) toggleBuyMenu();
+  if (e.code === 'KeyB') toggleBuyMenu();
 });
 
 // ----- buy phase: countdown before each duel round, like Unity GameManager ---
