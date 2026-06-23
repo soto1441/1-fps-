@@ -355,55 +355,100 @@ function updateTargetHealthBar(target) {
   barFill.material.color.setHex(frac > 0.5 ? 0xff3b3b : frac > 0.25 ? 0xff9d3b : 0xff2222);
 }
 
+// combat-android look (gunmetal chassis + glowing visor) instead of a plain
+// humanoid dummy — higher-segment geometry throughout so the curved armor
+// plates and barrel actually read as round instead of faceted up close
 function spawnTarget(x, z) {
   const group = new THREE.Group();
+  // lower metalness than a "real" gunmetal finish so the chassis still picks up
+  // ambient/sky light and doesn't render near-black in shadowed corners
+  const chassisMat = new THREE.MeshStandardMaterial({ color: 0x6b7480, roughness: 0.4, metalness: 0.55 });
+  const jointMat = new THREE.MeshStandardMaterial({ color: 0x363b42, roughness: 0.5, metalness: 0.45 });
+  const visorColor = 0x4fd8ff;
+
   const body = new THREE.Mesh(
-    new THREE.CapsuleGeometry(0.45, 1.2, 6, 12),
-    new THREE.MeshStandardMaterial({ color: 0xb0392f, roughness: 0.55, metalness: 0.05 })
+    new THREE.CapsuleGeometry(0.45, 1.2, 10, 24),
+    chassisMat
   );
   body.position.y = 1.1;
   body.castShadow = true;
 
-  // chest vest accent for a clearer silhouette / readable hitbox
+  // chest/back armor plating — a clearer silhouette and a readable hitbox
   const vest = new THREE.Mesh(
-    new THREE.CylinderGeometry(0.46, 0.4, 0.7, 12, 1, true, 0, Math.PI),
-    new THREE.MeshStandardMaterial({ color: 0x2c2c30, roughness: 0.7, side: THREE.DoubleSide })
+    new THREE.CylinderGeometry(0.48, 0.42, 0.72, 20, 1, true, 0, Math.PI),
+    new THREE.MeshStandardMaterial({ color: 0x282c32, roughness: 0.4, metalness: 0.7, side: THREE.DoubleSide })
   );
   vest.rotation.y = -Math.PI / 2;
   vest.position.y = 1.35;
   vest.castShadow = true;
 
+  // boxy armored shoulder pauldrons read clearly at a distance
+  const shoulderGeo = new THREE.BoxGeometry(0.26, 0.16, 0.3);
+  const shoulderL = new THREE.Mesh(shoulderGeo, jointMat);
+  shoulderL.position.set(-0.42, 1.78, 0);
+  shoulderL.castShadow = true;
+  const shoulderR = new THREE.Mesh(shoulderGeo, jointMat);
+  shoulderR.position.set(0.42, 1.78, 0);
+  shoulderR.castShadow = true;
+
   const head = new THREE.Mesh(
-    new THREE.SphereGeometry(0.3, 16, 16),
-    new THREE.MeshStandardMaterial({ color: 0xd9a374, roughness: 0.55 })
+    new THREE.SphereGeometry(0.3, 24, 24),
+    chassisMat
   );
   head.position.y = 2.0;
   head.castShadow = true;
 
+  // glowing blue visor band wraps most of the face, like a HUD strip
   const visor = new THREE.Mesh(
-    new THREE.BoxGeometry(0.42, 0.12, 0.1),
-    new THREE.MeshStandardMaterial({ color: 0x171a1f, roughness: 0.3, metalness: 0.4 })
+    new THREE.SphereGeometry(0.27, 20, 20, 0, Math.PI * 2, 0.35 * Math.PI, 0.5 * Math.PI),
+    new THREE.MeshStandardMaterial({ color: visorColor, emissive: visorColor, emissiveIntensity: 1.8, roughness: 0.3, metalness: 0.1 })
   );
-  visor.position.set(0, 2.04, -0.24);
+  visor.position.set(0, 2.0, 0);
+  const visorGlow = new THREE.PointLight(visorColor, 1.4, 4, 2);
+  visorGlow.position.set(0, 2.0, -0.2);
 
-  const gun = new THREE.Mesh(
-    new THREE.BoxGeometry(0.08, 0.08, 0.4),
-    new THREE.MeshStandardMaterial({ color: 0x14151a, roughness: 0.4, metalness: 0.6 })
+  // procedural rifle held at hip height, built the same way as the
+  // player's own weapon viewmodels (receiver + barrel + stock + mag)
+  const gun = new THREE.Group();
+  const gunReceiver = new THREE.Mesh(
+    new THREE.BoxGeometry(0.1, 0.13, 0.46),
+    new THREE.MeshStandardMaterial({ color: 0x16181c, roughness: 0.35, metalness: 0.65 })
   );
+  const gunBarrel = new THREE.Mesh(
+    new THREE.CylinderGeometry(0.022, 0.022, 0.28, 16),
+    new THREE.MeshStandardMaterial({ color: 0x0e0f11, roughness: 0.25, metalness: 0.85 })
+  );
+  gunBarrel.rotation.x = Math.PI / 2;
+  gunBarrel.position.set(0, 0.01, -0.35);
+  const gunMag = new THREE.Mesh(
+    new THREE.BoxGeometry(0.05, 0.2, 0.08),
+    new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.4, metalness: 0.6 })
+  );
+  gunMag.position.set(0, -0.15, 0.04);
+  gunMag.rotation.x = 0.12;
+  const gunStock = new THREE.Mesh(
+    new THREE.BoxGeometry(0.06, 0.07, 0.18),
+    new THREE.MeshStandardMaterial({ color: 0x1a1c20, roughness: 0.45, metalness: 0.55 })
+  );
+  gunStock.position.set(0, 0.0, 0.3);
+  gun.add(gunReceiver, gunBarrel, gunMag, gunStock);
   gun.position.set(0.32, 1.25, -0.1);
+  gun.rotation.y = -0.05;
+  for (const part of gun.children) part.castShadow = true;
+
   const muzzleLight = new THREE.PointLight(0xffaa55, 0, 5, 2);
-  muzzleLight.position.set(0.32, 1.25, -0.3);
+  muzzleLight.position.set(0.32, 1.25, -0.42);
 
   // separate lower-body hitbox: a slightly-forward box so low shots register
   // as a leg hit (reduced damage) instead of always counting as a body hit
   const leg = new THREE.Mesh(
     new THREE.BoxGeometry(0.5, 0.7, 0.5),
-    new THREE.MeshStandardMaterial({ color: 0x232328, roughness: 0.7 })
+    jointMat
   );
   leg.position.set(0, 0.35, 0.03);
   leg.castShadow = true;
 
-  group.add(body, vest, head, visor, gun, muzzleLight, leg);
+  group.add(body, vest, shoulderL, shoulderR, head, visor, visorGlow, gun, muzzleLight, leg);
   group.position.set(x, 0, z);
 
   // floating health bar (kept as a separate top-level object so the
@@ -709,9 +754,11 @@ function gunBox(w, h, d, mat, pos, rotX) {
   if (rotX) m.rotation.x = rotX;
   return m;
 }
-// cylinder barrel/scope, axis along z by default
+// cylinder barrel/scope, axis along z by default — 20 radial segments
+// (up from 12) so barrels/scopes/mags read as round instead of faceted
+// when the weapon fills a good chunk of the screen
 function gunCyl(rad, len, mat, pos, axis = 'z') {
-  const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 12), mat);
+  const m = new THREE.Mesh(new THREE.CylinderGeometry(rad, rad, len, 20), mat);
   if (axis === 'z') m.rotation.x = Math.PI / 2;
   else if (axis === 'x') m.rotation.z = Math.PI / 2;
   if (pos) m.position.copy(pos);
