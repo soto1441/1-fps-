@@ -1258,7 +1258,8 @@ const buyButtons = document.querySelectorAll('.buyBtn');
 let buyMenuOpen = false;
 
 function refreshBuyMenu() {
-  hud.buyCredits.textContent = playerCredits;
+  const unlimitedCredits = !isMatchMode();
+  hud.buyCredits.textContent = unlimitedCredits ? '무제한' : playerCredits;
   for (const btn of buyButtons) {
     const weaponKey = btn.dataset.weapon;
     const armorKey = btn.dataset.armor;
@@ -1267,12 +1268,12 @@ function refreshBuyMenu() {
       const owned = ownedWeapons.has(weaponKey);
       const cost = WEAPONS[weaponKey].cost;
       if (costEl) costEl.textContent = owned ? '보유중' : cost > 0 ? `${cost} CR` : 'FREE';
-      btn.classList.toggle('unaffordable', !owned && cost > playerCredits);
+      btn.classList.toggle('unaffordable', !unlimitedCredits && !owned && cost > playerCredits);
       btn.classList.toggle('active', weaponKey === currentWeaponKey);
     } else if (armorKey) {
       const tier = ARMOR_TIERS[armorKey];
       if (costEl) costEl.textContent = `${tier.cost} CR`;
-      btn.classList.toggle('unaffordable', tier.cost > playerCredits);
+      btn.classList.toggle('unaffordable', !unlimitedCredits && tier.cost > playerCredits);
       btn.classList.toggle('active', playerArmor === tier.value);
     }
   }
@@ -1324,14 +1325,15 @@ function updateBuyPhase(dt) {
 for (const btn of buyButtons) {
   btn.addEventListener('click', (e) => {
     e.stopPropagation();
-    if (!isMatchMode()) return;
+    // 사격장은 무기 연습용이라 크레드 제한 없이 아무 무기/방어구나 바로 받을 수 있다
+    const unlimitedCredits = !isMatchMode();
     const weaponKey = btn.dataset.weapon;
     const armorKey = btn.dataset.armor;
     if (weaponKey) {
       const alreadyOwned = ownedWeapons.has(weaponKey);
       const cost = alreadyOwned ? 0 : WEAPONS[weaponKey].cost;
-      if (cost > playerCredits) return;
-      playerCredits -= cost;
+      if (!unlimitedCredits && cost > playerCredits) return;
+      if (!unlimitedCredits) playerCredits -= cost;
       ownedWeapons.add(weaponKey);
       setWeapon(weaponKey);
       updateCreditsHud();
@@ -1339,8 +1341,8 @@ for (const btn of buyButtons) {
     } else if (armorKey) {
       const tier = ARMOR_TIERS[armorKey];
       if (tier.value <= playerArmor) return;
-      if (tier.cost > playerCredits) return;
-      playerCredits -= tier.cost;
+      if (!unlimitedCredits && tier.cost > playerCredits) return;
+      if (!unlimitedCredits) playerCredits -= tier.cost;
       playerArmor = tier.value;
       updateCreditsHud();
       updateArmorHud();
