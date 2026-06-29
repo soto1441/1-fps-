@@ -297,26 +297,32 @@ const MAPS = {
     ],
   },
   callout: {
-    name: '교차로',
+    // laid out after the Venetian lagoon reference (45°26'N 12°20'E) — terracotta
+    // brick walls, sandstone floor, and a narrow canal+footbridge through Market
+    name: '베네치아 수로',
     width: 80, depth: 96,
-    sky: 0x3c4658, fogNear: 28, fogFar: 95,
-    ground: 0x393f48, wall: 0x4f5a6a, cover: 0x5c4a36,
+    sky: 0xd9b97a, fogNear: 26, fogFar: 90,
+    ground: 0x9c8a6a, wall: 0x7a4632, cover: 0x5c4a36,
     spawn: [0, 1.7, 40],
     // Attacker Spawn (south) -> Mid Top -> Mid Plaza -> A/B Lobby+Main -> A/B Site,
-    // plus a Market corridor down to Defender Spawn (north)
+    // plus a Market corridor (canal crossing) down to Defender Spawn (north)
     interiorWalls: [
-      ...roomWalls(-14, 14, 26, 46, { z1: [-3, 3] }),               // Attacker Spawn
-      ...corridorWalls(-3, 3, 12, 26),                              // Mid Top
+      ...roomWalls(-14, 14, 26, 46, { z1: [-2, 2] }),               // Attacker Spawn
+      ...corridorWalls(-2, 2, 12, 26),                              // Mid Top (narrow alley)
       ...roomWalls(-16, 16, -8, 12, {                               // Mid Plaza (hub)
-        z2: [-3, 3], z1: [-3, 3], x2: [-2, 8], x1: [-2, 8],
+        z2: [-2, 2], z1: [-2, 2], x2: [1, 8], x1: [1, 8],
       }),
-      ...corridorWalls(16, 28, -2, 8),                              // A Lobby/Main
+      ...corridorWalls(16, 28, 1, 8),                               // A Lobby/Main
       ...roomWalls(12, 34, -34, -2, { z2: [16, 28] }),              // A Site
-      ...corridorWalls(-28, -16, -2, 8),                            // B Lobby/Main
+      ...corridorWalls(-28, -16, 1, 8),                             // B Lobby/Main
       ...roomWalls(-34, -12, -34, -2, { z2: [-28, -16] }),          // B Site
-      ...corridorWalls(-3, 3, -22, -8),                             // Market
-      ...roomWalls(-14, 14, -46, -22, { z2: [-3, 3] }),             // Defender Spawn
+      ...corridorWalls(-2, 2, -22, -8),                             // Market (canal alley)
+      ...roomWalls(-14, 14, -46, -22, { z2: [-2, 2] }),             // Defender Spawn
     ],
+    // narrow canal cutting across the Market alley, crossed by a single
+    // wooden footbridge — purely cosmetic, doesn't block or damage movement
+    water: [[0, -15, 4, 6]],
+    bridges: [[4, 0.15, 6, 0, 0.08, -15]],
     coverPositions: [
       [22, -10], [28, -26], [18, -28],   // A Window / A Garden / A Raftars
       [-22, -10], [-28, -26],            // B Boat House
@@ -423,6 +429,29 @@ function buildLevel(key) {
     scene.add(lava);
     levelMeshes.push(lava);
     currentHazards.push({ x, z, w, d, mesh: lava });
+  }
+
+  for (const [x, z, w, d] of cfg.water || []) {
+    const water = new THREE.Mesh(
+      new THREE.BoxGeometry(w, 0.08, d),
+      new THREE.MeshStandardMaterial({
+        color: 0x2f5d6b, emissive: 0x163a44, emissiveIntensity: 0.4,
+        roughness: 0.15, metalness: 0.2, transparent: true, opacity: 0.85,
+      })
+    );
+    water.position.set(x, 0.03, z);
+    scene.add(water);
+    levelMeshes.push(water);
+  }
+
+  for (const [w, h, d, x, y, z] of cfg.bridges || []) {
+    // flush with the floor and walked straight over, so it's purely
+    // cosmetic — not a collider, since collision here is a flat XZ check
+    // that ignores height and would otherwise block the crossing
+    const plank = makeBoxMesh(w, h, d, 0x6b4a32, [w / 2, d / 2]);
+    plank.position.set(x, y, z);
+    scene.add(plank);
+    levelMeshes.push(plank);
   }
 }
 
