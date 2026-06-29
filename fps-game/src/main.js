@@ -1,4 +1,7 @@
 import * as THREE from 'three';
+import { EffectComposer } from '../vendor/postprocessing/EffectComposer.js';
+import { RenderPass } from '../vendor/postprocessing/RenderPass.js';
+import { UnrealBloomPass } from '../vendor/postprocessing/UnrealBloomPass.js';
 
 /* ----------------------------------------------------------------------
    1FPS — minimal browser FPS prototype
@@ -51,6 +54,17 @@ scene.background = new THREE.Color(0x2b3850);
 scene.fog = new THREE.Fog(0x2b3850, 25, 80);
 
 const camera = new THREE.PerspectiveCamera(78, window.innerWidth / window.innerHeight, 0.1, 1000);
+
+// bloom pass picks up emissive surfaces (visor glow, muzzle flash, ability
+// effects) and blooms them — strength/radius/threshold tuned low so it
+// stays a subtle glow instead of washing out the whole scene
+const composer = new EffectComposer(renderer);
+composer.addPass(new RenderPass(scene, camera));
+const bloomPass = new UnrealBloomPass(
+  new THREE.Vector2(window.innerWidth, window.innerHeight),
+  0.45, 0.4, 0.86
+);
+composer.addPass(bloomPass);
 
 // yawObject (turns left/right) holds pitchObject (tilts up/down) holds camera
 const pitchObject = new THREE.Object3D();
@@ -2147,6 +2161,7 @@ window.addEventListener('resize', () => {
   camera.aspect = window.innerWidth / window.innerHeight;
   camera.updateProjectionMatrix();
   renderer.setSize(window.innerWidth, window.innerHeight);
+  composer.setSize(window.innerWidth, window.innerHeight);
 });
 
 // ----- main loop ------------------------------------------------------------
@@ -2172,7 +2187,7 @@ function animate() {
   updateAbilityEffects(dt);
   if (scoreboardOpen) updateScoreboard();
 
-  renderer.render(scene, camera);
+  composer.render();
 }
 buildLevel(currentMapKey);
 for (let i = 0; i < 4; i++) spawnRandomTarget();
