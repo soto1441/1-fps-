@@ -32,14 +32,17 @@ const hud = {
 // ----- renderer / scene / camera -----------------------------------
 const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
 renderer.setSize(window.innerWidth, window.innerHeight);
-// cap at 2x — uncapped devicePixelRatio on some displays (3x+) tanks fill-rate
+// cap at 2.5x — uncapped devicePixelRatio on some displays (3x+) tanks fill-rate
 // for no visible benefit, capping keeps text/edges sharp without the cost
-renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2.5));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping;
-renderer.toneMappingExposure = 1.1;
+renderer.toneMappingExposure = 1.15;
 renderer.outputColorSpace = THREE.SRGBColorSpace;
+// light contrast/saturation lift on the canvas itself — a cheap stand-in for a
+// color-grading post-process pass since no postprocessing pipeline is wired up
+renderer.domElement.style.filter = 'contrast(1.06) saturate(1.1)';
 document.body.appendChild(renderer.domElement);
 const maxAnisotropy = renderer.capabilities.getMaxAnisotropy();
 
