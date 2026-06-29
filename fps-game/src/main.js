@@ -182,6 +182,50 @@ function addCollider(mesh) {
 const ARENA = 60;
 const wallHeight = 6;
 
+// generates boundary wall segments for a rectangular room, with an optional
+// door gap (a [start, end] range) on any of its four sides so rooms can be
+// stitched together into corridors instead of always being sealed boxes
+function roomWalls(x1, x2, z1, z2, doors = {}) {
+  const h = wallHeight, t = 0.8;
+  const segs = [];
+  const addH = (zFixed, xa, xb, gap) => {
+    if (gap) {
+      const [ga, gb] = gap;
+      if (ga > xa) segs.push([ga - xa, h, t, (xa + ga) / 2, h / 2, zFixed]);
+      if (xb > gb) segs.push([xb - gb, h, t, (gb + xb) / 2, h / 2, zFixed]);
+    } else segs.push([xb - xa, h, t, (xa + xb) / 2, h / 2, zFixed]);
+  };
+  const addV = (xFixed, za, zb, gap) => {
+    if (gap) {
+      const [ga, gb] = gap;
+      if (ga > za) segs.push([t, h, ga - za, xFixed, h / 2, (za + ga) / 2]);
+      if (zb > gb) segs.push([t, h, zb - gb, xFixed, h / 2, (gb + zb) / 2]);
+    } else segs.push([t, h, zb - za, xFixed, h / 2, (za + zb) / 2]);
+  };
+  addH(z1, x1, x2, doors.z1);
+  addH(z2, x1, x2, doors.z2);
+  addV(x1, z1, z2, doors.x1);
+  addV(x2, z1, z2, doors.x2);
+  return segs;
+}
+
+// a corridor is just two parallel side walls with no end caps — the ends
+// open straight into whichever rooms it connects
+function corridorWalls(x1, x2, z1, z2) {
+  const h = wallHeight, t = 0.8;
+  const wide = (x2 - x1) >= (z2 - z1);
+  if (wide) {
+    return [
+      [x2 - x1, h, t, (x1 + x2) / 2, h / 2, z1],
+      [x2 - x1, h, t, (x1 + x2) / 2, h / 2, z2],
+    ];
+  }
+  return [
+    [t, h, z2 - z1, x1, h / 2, (z1 + z2) / 2],
+    [t, h, z2 - z1, x2, h / 2, (z1 + z2) / 2],
+  ];
+}
+
 const MAPS = {
   urban: {
     name: '도심 폐허',
@@ -252,6 +296,33 @@ const MAPS = {
       [-15, -15, 10, 10], [15, 15, 10, 10], [-15, 15, 8, 8], [15, -15, 8, 8],
     ],
   },
+  callout: {
+    name: '교차로',
+    width: 80, depth: 96,
+    sky: 0x3c4658, fogNear: 28, fogFar: 95,
+    ground: 0x393f48, wall: 0x4f5a6a, cover: 0x5c4a36,
+    spawn: [0, 1.7, 40],
+    // Attacker Spawn (south) -> Mid Top -> Mid Plaza -> A/B Lobby+Main -> A/B Site,
+    // plus a Market corridor down to Defender Spawn (north)
+    interiorWalls: [
+      ...roomWalls(-14, 14, 26, 46, { z1: [-3, 3] }),               // Attacker Spawn
+      ...corridorWalls(-3, 3, 12, 26),                              // Mid Top
+      ...roomWalls(-16, 16, -8, 12, {                               // Mid Plaza (hub)
+        z2: [-3, 3], z1: [-3, 3], x2: [-2, 8], x1: [-2, 8],
+      }),
+      ...corridorWalls(16, 28, -2, 8),                              // A Lobby/Main
+      ...roomWalls(12, 34, -34, -2, { z2: [16, 28] }),              // A Site
+      ...corridorWalls(-28, -16, -2, 8),                            // B Lobby/Main
+      ...roomWalls(-34, -12, -34, -2, { z2: [-28, -16] }),          // B Site
+      ...corridorWalls(-3, 3, -22, -8),                             // Market
+      ...roomWalls(-14, 14, -46, -22, { z2: [-3, 3] }),             // Defender Spawn
+    ],
+    coverPositions: [
+      [22, -10], [28, -26], [18, -28],   // A Window / A Garden / A Raftars
+      [-22, -10], [-28, -26],            // B Boat House
+      [-8, 2], [8, 2], [0, -16],         // Mid Catwalk / Cubby / Market crates
+    ],
+  },
 };
 
 let currentMapKey = 'urban';
@@ -274,17 +345,20 @@ function buildLevel(key) {
   scene.background = new THREE.Color(cfg.sky);
   scene.fog = new THREE.Fog(cfg.sky, cfg.fogNear, cfg.fogFar);
 
-  const ground = makeBoxMesh(ARENA, 1, ARENA, cfg.ground, [ARENA / 3, ARENA / 3]);
+  const mapW = cfg.width || ARENA;
+  const mapD = cfg.depth || ARENA;
+
+  const ground = makeBoxMesh(mapW, 1, mapD, cfg.ground, [mapW / 3, mapD / 3]);
   ground.position.y = -0.5;
   ground.receiveShadow = true;
   scene.add(ground);
   levelMeshes.push(ground);
 
   const wallDefs = [
-    [ARENA, wallHeight, 1, 0, wallHeight / 2, -ARENA / 2],
-    [ARENA, wallHeight, 1, 0, wallHeight / 2, ARENA / 2],
-    [1, wallHeight, ARENA, -ARENA / 2, wallHeight / 2, 0],
-    [1, wallHeight, ARENA, ARENA / 2, wallHeight / 2, 0],
+    [mapW, wallHeight, 1, 0, wallHeight / 2, -mapD / 2],
+    [mapW, wallHeight, 1, 0, wallHeight / 2, mapD / 2],
+    [1, wallHeight, mapD, -mapW / 2, wallHeight / 2, 0],
+    [1, wallHeight, mapD, mapW / 2, wallHeight / 2, 0],
   ];
   for (const [w, h, d, x, y, z] of wallDefs) {
     const wall = makeBoxMesh(w, h, d, cfg.wall, [Math.max(w, d) / 6, wallHeight / 3]);
@@ -310,7 +384,7 @@ function buildLevel(key) {
       const pillar = makeBoxMesh(1.4, pillarHeight, 1.4, pillarColor);
       pillar.material.metalness = 0.35;
       pillar.material.roughness = 0.5;
-      pillar.position.set(sx * (ARENA / 2 - 0.6), pillarHeight / 2, sz * (ARENA / 2 - 0.6));
+      pillar.position.set(sx * (mapW / 2 - 0.6), pillarHeight / 2, sz * (mapD / 2 - 0.6));
       scene.add(pillar);
       addCollider(pillar);
       levelMeshes.push(pillar);
@@ -350,6 +424,10 @@ function buildLevel(key) {
     levelMeshes.push(lava);
     currentHazards.push({ x, z, w, d, mesh: lava });
   }
+}
+
+function spawnPoint() {
+  return (MAPS[currentMapKey] && MAPS[currentMapKey].spawn) || [0, 1.7, 8];
 }
 
 function hazardAt(x, z) {
@@ -1833,7 +1911,7 @@ function killPlayer() {
     // no simulated teammates yet, so the player going down counts as the
     // whole team being wiped — matches the "적 팀 전멸" win condition in
     // reverse, since the player is the only combatant on their side
-    yawObject.position.set(0, 1.7, 8);
+    yawObject.position.set(...spawnPoint());
     for (const target of targets.slice()) killTarget(target, false, true);
     awardRoundResult('enemy');
     return;
@@ -1904,7 +1982,7 @@ function startMatch() {
 function respawnPlayer() {
   playerHp = PLAYER_MAX_HP;
   gameOver = false;
-  yawObject.position.set(0, 1.7, 8);
+  yawObject.position.set(...spawnPoint());
   verticalVelocity = 0;
   updateHealthHud();
   blockerTitle.textContent = '1FPS';
@@ -1921,7 +1999,7 @@ const mapButtons = document.querySelectorAll('.mapBtn');
 function selectMap(key) {
   if (!MAPS[key] || key === currentMapKey) return;
   buildLevel(key);
-  yawObject.position.set(0, 1.7, 8);
+  yawObject.position.set(...spawnPoint());
   startMatch();
   for (const btn of mapButtons) btn.classList.toggle('active', btn.dataset.map === key);
 }
