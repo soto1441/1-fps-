@@ -1496,7 +1496,8 @@ function tryShoot() {
         const headshot = hit.object === target.userData.head;
         const legshot = hit.object === target.userData.leg;
         if (headshot) headshotByTarget.set(target, true);
-        const dmg = headshot ? w.dmgHead : legshot ? (w.dmgLeg != null ? w.dmgLeg : w.dmgBody) : w.dmgBody;
+        // headshots are always a guaranteed kill, regardless of weapon/range falloff
+        const dmg = headshot ? target.userData.hp : legshot ? (w.dmgLeg != null ? w.dmgLeg : w.dmgBody) : w.dmgBody;
         damageByTarget.set(target, (damageByTarget.get(target) || 0) + dmg);
       }
     }
